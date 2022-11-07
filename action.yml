@@ -1,11 +1,14 @@
-name: 'Your name here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: 'Tidelift Issue Scanner'
+description: 'Checks issues against prior reports'
+author: 'Tidelift'
 inputs:
-  milliseconds: # change this
+  repo-token:
+    description: 'The GitHub token'
+    required: false
+    default: ${{ github.token }}
+  tidelift-token:
+    description: "Tidelift API access"
     required: true
-    description: 'input description here'
-    default: 'default value if applicable'
 runs:
   using: 'node16'
   main: 'dist/index.js'
