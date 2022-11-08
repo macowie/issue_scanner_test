@@ -1,0 +1,16 @@
+name: Tidelift Scanner Example
+on:
+  issues:
+    types: [opened, edited]
+    
+jobs:
+  tidelift_scanner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: macowie/issue_scanner_test
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          tidelift-token: ${{ secrets.TIDELIFT_TOKEN }}
+    permissions: write-all
+      # issues: write
+      # pull-requests: write
