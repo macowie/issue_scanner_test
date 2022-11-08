@@ -113,7 +113,7 @@ function isBotReportComment(comment, vuln_id: VulnerabilityId): boolean {
   return (
     comment.user.login === actionsBot &&
     comment.body &&
-    comment.body.match(vuln_id)
+    comment.body.includes(vuln_id)
   )
 }
 
