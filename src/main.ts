@@ -1,4 +1,4 @@
-import {getInput, setFailed, notice} from '@actions/core'
+import {getInput, setFailed, notice, info } from '@actions/core'
 import * as github from '@actions/github'
 import {Context as GithubContext} from '@actions/github/lib/context'
 
@@ -139,24 +139,28 @@ async function scanIssue(): Promise<string> {
     return 'Did not find any CVEs mentioned'
   }
 
-  await addLabels(issueContext, mentionedCves.map(formatLabelName))
-
   const recs = await getTideliftRecommendations(mentionedCves)
+  const labelsToAdd = mentionedCves.map(formatLabelName)
 
-  if (recs.length === 0) {
-    return `Did not find any Tidelift recommendations for CVEs: ${mentionedCves}`
+  if (recs.length > 0) {
+    labelsToAdd.push('has-recommendation')
   }
 
   for (const rec of recs) {
     await createRecommendationCommentIfNeeded(issueContext, rec)
   }
 
-  return `Found: ${mentionedCves}; Recs: ${recs}`
+  await addLabels(issueContext, labelsToAdd)
+
+  return `Found: ${mentionedCves}; Recs: ${recs.map(r => r.vuln_id)}`
 }
 
 async function run(): Promise<void> {
   try {
-    await scanIssue()
+    const message = await scanIssue()
+
+    info(message)
+    process.exit(0)
   } catch (error) {
     if (error instanceof IssueNotFoundError) {
       notice('Could not find current issue. Skipping.')

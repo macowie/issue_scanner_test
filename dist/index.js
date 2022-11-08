@@ -127,21 +127,24 @@ function scanIssue() {
         if (mentionedCves.length === 0) {
             return 'Did not find any CVEs mentioned';
         }
-        yield addLabels(issueContext, mentionedCves.map(formatLabelName));
         const recs = yield (0, tidelift_recommendation_1.getTideliftRecommendations)(mentionedCves);
-        if (recs.length === 0) {
-            return `Did not find any Tidelift recommendations for CVEs: ${mentionedCves}`;
+        const labelsToAdd = mentionedCves.map(formatLabelName);
+        if (recs.length > 0) {
+            labelsToAdd.push('has-recommendation');
         }
         for (const rec of recs) {
             yield createRecommendationCommentIfNeeded(issueContext, rec);
         }
-        return `Found: ${mentionedCves}; Recs: ${recs}`;
+        yield addLabels(issueContext, labelsToAdd);
+        return `Found: ${mentionedCves}; Recs: ${recs.map(r => r.vuln_id)}`;
     });
 }
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            yield scanIssue();
+            const message = yield scanIssue();
+            (0, core_1.info)(message);
+            process.exit(0);
         }
         catch (error) {
             if (error instanceof IssueNotFoundError) {
