@@ -42,6 +42,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core_1 = __nccwpck_require__(2186);
 const github = __importStar(__nccwpck_require__(5438));
 const tidelift_recommendation_1 = __nccwpck_require__(6190);
+const IssueNotFoundError = Error;
 const myToken = (0, core_1.getInput)('repo-token');
 const octokit = github.getOctokit(myToken);
 function getIssue(issueContext) {
@@ -69,7 +70,7 @@ function getIssueNumber(context) {
         ((_d = (_c = context.payload) === null || _c === void 0 ? void 0 : _c.pull_request) === null || _d === void 0 ? void 0 : _d.number);
     if (possibleNumber)
         return Number(possibleNumber);
-    throw Error('Could not determine current issue');
+    throw IssueNotFoundError;
 }
 function getIssueContext(context) {
     var _a, _b, _c, _d, _e;
@@ -78,7 +79,7 @@ function getIssueContext(context) {
     const issue_number = getIssueNumber(context);
     if (repo && owner && issue_number)
         return { repo, owner, issue_number };
-    throw Error('Could not determine current issue');
+    throw IssueNotFoundError;
 }
 function findMentionedCves(issue) {
     const regex = /CVE-[\d]+-[\d]+/gi;
@@ -142,14 +143,15 @@ function run() {
             yield scanIssue();
         }
         catch (error) {
-            let msg;
-            if (error instanceof Error) {
-                msg = error.message;
+            if (error instanceof IssueNotFoundError) {
+                (0, core_1.notice)('Could not find current issue. Skipping.');
+            }
+            else if (error instanceof Error) {
+                (0, core_1.setFailed)(error);
             }
             else {
-                msg = error;
+                (0, core_1.setFailed)(String(error));
             }
-            (0, core_1.setFailed)(msg);
         }
     });
 }
