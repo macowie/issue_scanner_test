@@ -77,6 +77,7 @@ function findMentionedCves(issue): VulnerabilityId[] {
         .filter(field => typeof field === 'string')
         .flatMap(field => field.match(regex))
         .filter(field => field)
+        .map(vuln_id => vuln_id.toUpperCase())
     )
   )
 }
