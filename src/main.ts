@@ -1,51 +1,42 @@
 import {getInput, setFailed} from '@actions/core'
 import * as github from '@actions/github'
-import {Context} from '@actions/github/lib/context'
+import {Context as GithubContext} from '@actions/github/lib/context'
 
 import {
   TideliftRecommendation,
   getTideliftRecommendations
 } from './tidelift_recommendation'
 
-const myToken = getInput('repo-token')
-const octokit = github.getOctokit(myToken)
-
 export type VulnerabilityId = string
 export type IssueNumber = number
 export type RepoOwner = string
 export type RepoName = string
+export type IssueContext = {
+  owner: RepoOwner
+  repo: RepoName
+  issue_number: IssueNumber
+}
 
-async function getIssue(
-  repoOwner: RepoOwner,
-  repoName: RepoName,
-  issueNumber: IssueNumber
-): Promise<object> {
-  return octokit.rest.issues.get({
-    owner: repoOwner,
-    repo: repoName,
-    issue_number: issueNumber
-  })
+const myToken = getInput('repo-token')
+const octokit = github.getOctokit(myToken)
+
+async function getIssue(issueContext: IssueContext): Promise<object> {
+  return octokit.rest.issues.get(issueContext)
 }
 
 async function addLabels(
-  owner: RepoOwner,
-  repo: RepoName,
-  issue_number: IssueNumber,
+  issueContext: IssueContext,
   labels: string[]
 ): Promise<object> {
-  return octokit.rest.issues.addLabels({owner, repo, issue_number, labels})
+  return octokit.rest.issues.addLabels({...issueContext, labels})
 }
 
 async function addComment(
-  owner: RepoOwner,
-  repo: RepoName,
-  issue_number: IssueNumber,
+  issueContext: IssueContext,
   body: string
 ): Promise<object> {
   return octokit.rest.issues.createComment({
-    owner,
-    repo,
-    issue_number,
+    ...issueContext,
     body
   })
 }
@@ -54,13 +45,25 @@ function issueHasBeenAssigned(issue): boolean {
   return issue.data.assignees.length !== 0
 }
 
-function getIssueNumber(context: Context): IssueNumber | undefined {
+function getIssueNumber(context: GithubContext): IssueNumber {
   const possibleNumber =
     getInput('issue-number') ||
     context.payload?.issue?.number ||
     context.payload?.pull_request?.number
 
   if (possibleNumber) return Number(possibleNumber)
+
+  throw Error('Could not determine current issue')
+}
+
+function getIssueContext(context: GithubContext): IssueContext {
+  const repo = context.payload?.repository?.name
+  const owner = context.payload?.repository?.owner?.login
+  const issue_number = getIssueNumber(context)
+
+  if (repo && owner && issue_number) return {repo, owner, issue_number}
+
+  throw Error('Could not determine current issue')
 }
 
 function findMentionedCves(issue): VulnerabilityId[] {
@@ -90,26 +93,38 @@ function formatRecommendationText(
   }.\n\n${JSON.stringify(recommendation)}`
 }
 
-function formatRecommendationsComment(recs: TideliftRecommendation[]): string {
-  return recs.map(formatRecommendationText).join('\n\n')
+async function createRecommendationCommentIfNeeded(
+  issueContext: IssueContext,
+  rec: TideliftRecommendation
+): Promise<object | undefined> {
+  const comments = await octokit.rest.issues.listComments(issueContext)
+
+  const botComments = comments.data.filter(comment =>
+    isBotReportComment(comment, rec.vuln_id)
+  )
+
+  if (botComments.length === 0)
+    return addComment(issueContext, formatRecommendationText(rec))
+}
+
+function isBotReportComment(comment, vuln_id: VulnerabilityId): boolean {
+  const actionsBot = 'github-actions[bot]'
+  return (
+    comment.user.login === actionsBot &&
+    comment.body &&
+    comment.body.match(vuln_id)
+  )
 }
 
 async function scanIssue(): Promise<string> {
-  const repoName = github.context?.payload?.repository?.name as RepoName
-  const repoOwner = github.context?.payload?.repository?.owner
-    ?.login as RepoOwner
+  const issueContext = getIssueContext(github.context)
+
   // eslint-disable-next-line prefer-const
   let ignoreIfAssigned = false
 
-  const issueNumber = getIssueNumber(github.context)
-
-  if (issueNumber === undefined) {
-    return 'No action being taken. Ignoring because issueNumber was not identified'
-  }
-
   // Refresh for latest changes
   // eslint-disable-next-line prefer-const
-  let issue = await getIssue(repoOwner, repoName, issueNumber)
+  let issue = await getIssue(issueContext)
 
   if (ignoreIfAssigned && issueHasBeenAssigned(issue)) {
     return 'No action being taken. Ignoring because one or more assignees have been added to the issue'
@@ -121,12 +136,7 @@ async function scanIssue(): Promise<string> {
     return 'Did not find any CVEs mentioned'
   }
 
-  await addLabels(
-    repoOwner,
-    repoName,
-    issueNumber,
-    mentionedCves.map(formatLabelName)
-  )
+  await addLabels(issueContext, mentionedCves.map(formatLabelName))
 
   const recs = await getTideliftRecommendations(mentionedCves)
 
@@ -134,12 +144,9 @@ async function scanIssue(): Promise<string> {
     return `Did not find any Tidelift recommendations for CVEs: ${mentionedCves}`
   }
 
-  await addComment(
-    repoOwner,
-    repoName,
-    issueNumber,
-    formatRecommendationsComment(recs)
-  )
+  for (const rec of recs) {
+    await createRecommendationCommentIfNeeded(issueContext, rec)
+  }
 
   return `Found: ${mentionedCves}; Recs: ${recs}`
 }
