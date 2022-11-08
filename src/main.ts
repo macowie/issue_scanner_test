@@ -1,4 +1,4 @@
-import {getInput, setFailed} from '@actions/core'
+import {getInput, setFailed, notice} from '@actions/core'
 import * as github from '@actions/github'
 import {Context as GithubContext} from '@actions/github/lib/context'
 
@@ -16,6 +16,8 @@ export type IssueContext = {
   repo: RepoName
   issue_number: IssueNumber
 }
+
+const IssueNotFoundError = Error
 
 const myToken = getInput('repo-token')
 const octokit = github.getOctokit(myToken)
@@ -53,7 +55,7 @@ function getIssueNumber(context: GithubContext): IssueNumber {
 
   if (possibleNumber) return Number(possibleNumber)
 
-  throw Error('Could not determine current issue')
+  throw IssueNotFoundError
 }
 
 function getIssueContext(context: GithubContext): IssueContext {
@@ -63,7 +65,7 @@ function getIssueContext(context: GithubContext): IssueContext {
 
   if (repo && owner && issue_number) return {repo, owner, issue_number}
 
-  throw Error('Could not determine current issue')
+  throw IssueNotFoundError
 }
 
 function findMentionedCves(issue): VulnerabilityId[] {
@@ -156,13 +158,13 @@ async function run(): Promise<void> {
   try {
     await scanIssue()
   } catch (error) {
-    let msg
-    if (error instanceof Error) {
-      msg = error.message
+    if (error instanceof IssueNotFoundError) {
+      notice('Could not find current issue. Skipping.')
+    } else if (error instanceof Error) {
+      setFailed(error)
     } else {
-      msg = error
+      setFailed(String(error))
     }
-    setFailed(msg)
   }
 }
 
