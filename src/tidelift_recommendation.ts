@@ -1,6 +1,6 @@
 import {VulnerabilityId} from './main'
 import {getInput} from '@actions/core'
-import axios from 'axios'
+import axios, {AxiosError} from 'axios'
 
 export class TideliftRecommendation {
   vuln_id: VulnerabilityId
@@ -59,9 +59,10 @@ export async function getTideliftRecommendation(
 
     return new TideliftRecommendation(vuln_id, response.data)
   } catch (error) {
-    if (error.response && error.response.status === 404) {
+    if (error instanceof AxiosError && error.response?.status === 404) {
       // Not Found
     }
+
     // eslint-disable-next-line no-console
     console.error(`Problem fetching Tidelift Recommendations for: ${vuln_id}`)
   }
