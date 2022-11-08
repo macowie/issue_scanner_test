@@ -82,8 +82,8 @@ function findMentionedCves(issue): VulnerabilityId[] {
   )
 }
 
-function formatLabelName(cve: VulnerabilityId): string {
-  return `:yellow_circle: ${cve.toUpperCase()}`
+function formatLabelName(vuln_id: VulnerabilityId): string {
+  return `:yellow_circle: ${vuln_id.toUpperCase()}`
 }
 
 function formatRecommendationText(
