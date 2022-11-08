@@ -13,6 +13,8 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           tidelift-token: ${{ secrets.TIDELIFT_TOKEN }}
-    permissions: write-all
-      # issues: write
-      # pull-requests: write
+    # permissions:
+    #   actions: read
+    #   contents: read
+    #   issues: write
+    #   pull-requests: read
