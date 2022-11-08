@@ -17,7 +17,7 @@ export type IssueContext = {
   issue_number: IssueNumber
 }
 
-const IssueNotFoundError = Error
+class IssueNotFoundError extends Error {}
 
 const myToken = getInput('repo-token')
 const octokit = github.getOctokit(myToken)
@@ -55,7 +55,7 @@ function getIssueNumber(context: GithubContext): IssueNumber {
 
   if (possibleNumber) return Number(possibleNumber)
 
-  throw IssueNotFoundError
+  throw new IssueNotFoundError()
 }
 
 function getIssueContext(context: GithubContext): IssueContext {
@@ -65,7 +65,7 @@ function getIssueContext(context: GithubContext): IssueContext {
 
   if (repo && owner && issue_number) return {repo, owner, issue_number}
 
-  throw IssueNotFoundError
+  throw new IssueNotFoundError()
 }
 
 function findMentionedCves(issue): VulnerabilityId[] {
@@ -160,6 +160,7 @@ async function run(): Promise<void> {
   } catch (error) {
     if (error instanceof IssueNotFoundError) {
       notice('Could not find current issue. Skipping.')
+      process.exit(0)
     } else if (error instanceof Error) {
       setFailed(error)
     } else {
