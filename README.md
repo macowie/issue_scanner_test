@@ -3,7 +3,7 @@
 Does helpful things when issues are opened
 
 <p align="center">
-  <a href="https://github.com/actions/typescript-action/actions"><img alt="typescript-action status" src="https://github.com/actions/typescript-action/workflows/build-test/badge.svg"></a>
+  <a href="https://github.com/macowie/issue_scanner_test/actions"><img alt="build status" src="https://github.com/macowie/issue_scanner_test/workflows/build-test/badge.svg"></a>
 </p>
 
 Generated from [actions/typescript-action](https://github.com/actions/typescript-action)
