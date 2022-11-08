@@ -44,28 +44,19 @@ const github = __importStar(__nccwpck_require__(5438));
 const tidelift_recommendation_1 = __nccwpck_require__(6190);
 const myToken = (0, core_1.getInput)('repo-token');
 const octokit = github.getOctokit(myToken);
-function getIssue(repoOwner, repoName, issueNumber) {
+function getIssue(issueContext) {
     return __awaiter(this, void 0, void 0, function* () {
-        return octokit.rest.issues.get({
-            owner: repoOwner,
-            repo: repoName,
-            issue_number: issueNumber
-        });
+        return octokit.rest.issues.get(issueContext);
     });
 }
-function addLabels(owner, repo, issue_number, labels) {
+function addLabels(issueContext, labels) {
     return __awaiter(this, void 0, void 0, function* () {
-        return octokit.rest.issues.addLabels({ owner, repo, issue_number, labels });
+        return octokit.rest.issues.addLabels(Object.assign(Object.assign({}, issueContext), { labels }));
     });
 }
-function addComment(owner, repo, issue_number, body) {
+function addComment(issueContext, body) {
     return __awaiter(this, void 0, void 0, function* () {
-        return octokit.rest.issues.createComment({
-            owner,
-            repo,
-            issue_number,
-            body
-        });
+        return octokit.rest.issues.createComment(Object.assign(Object.assign({}, issueContext), { body }));
     });
 }
 function issueHasBeenAssigned(issue) {
@@ -78,6 +69,16 @@ function getIssueNumber(context) {
         ((_d = (_c = context.payload) === null || _c === void 0 ? void 0 : _c.pull_request) === null || _d === void 0 ? void 0 : _d.number);
     if (possibleNumber)
         return Number(possibleNumber);
+    throw Error('Could not determine current issue');
+}
+function getIssueContext(context) {
+    var _a, _b, _c, _d, _e;
+    const repo = (_b = (_a = context.payload) === null || _a === void 0 ? void 0 : _a.repository) === null || _b === void 0 ? void 0 : _b.name;
+    const owner = (_e = (_d = (_c = context.payload) === null || _c === void 0 ? void 0 : _c.repository) === null || _d === void 0 ? void 0 : _d.owner) === null || _e === void 0 ? void 0 : _e.login;
+    const issue_number = getIssueNumber(context);
+    if (repo && owner && issue_number)
+        return { repo, owner, issue_number };
+    throw Error('Could not determine current issue');
 }
 function findMentionedCves(issue) {
     const regex = /CVE-[\d]+-[\d]+/gi;
@@ -86,31 +87,37 @@ function findMentionedCves(issue) {
         .map(field => issue.data[field])
         .filter(field => typeof field === 'string')
         .flatMap(field => field.match(regex))
-        .filter(field => field)));
+        .filter(field => field)
+        .map(vuln_id => vuln_id.toUpperCase())));
 }
-function formatLabelName(cve) {
-    return `:yellow_circle: ${cve.toUpperCase()}`;
+function formatLabelName(vuln_id) {
+    return `:yellow_circle: ${vuln_id.toUpperCase()}`;
 }
 function formatRecommendationText(recommendation) {
     return `:wave: Looks like you're reporting ${recommendation.vuln_id}.\n\n${JSON.stringify(recommendation)}`;
 }
-function formatRecommendationsComment(recs) {
-    return recs.map(formatRecommendationText).join('\n\n');
+function createRecommendationCommentIfNeeded(issueContext, rec) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const comments = yield octokit.rest.issues.listComments(issueContext);
+        const botComments = comments.data.filter(comment => isBotReportComment(comment, rec.vuln_id));
+        if (botComments.length === 0)
+            return addComment(issueContext, formatRecommendationText(rec));
+    });
+}
+function isBotReportComment(comment, vuln_id) {
+    const actionsBot = 'github-actions[bot]';
+    return (comment.user.login === actionsBot &&
+        comment.body &&
+        comment.body.includes(vuln_id));
 }
 function scanIssue() {
-    var _a, _b, _c, _d, _e, _f, _g;
     return __awaiter(this, void 0, void 0, function* () {
-        const repoName = (_c = (_b = (_a = github.context) === null || _a === void 0 ? void 0 : _a.payload) === null || _b === void 0 ? void 0 : _b.repository) === null || _c === void 0 ? void 0 : _c.name;
-        const repoOwner = (_g = (_f = (_e = (_d = github.context) === null || _d === void 0 ? void 0 : _d.payload) === null || _e === void 0 ? void 0 : _e.repository) === null || _f === void 0 ? void 0 : _f.owner) === null || _g === void 0 ? void 0 : _g.login;
+        const issueContext = getIssueContext(github.context);
         // eslint-disable-next-line prefer-const
         let ignoreIfAssigned = false;
-        const issueNumber = getIssueNumber(github.context);
-        if (issueNumber === undefined) {
-            return 'No action being taken. Ignoring because issueNumber was not identified';
-        }
         // Refresh for latest changes
         // eslint-disable-next-line prefer-const
-        let issue = yield getIssue(repoOwner, repoName, issueNumber);
+        let issue = yield getIssue(issueContext);
         if (ignoreIfAssigned && issueHasBeenAssigned(issue)) {
             return 'No action being taken. Ignoring because one or more assignees have been added to the issue';
         }
@@ -118,12 +125,14 @@ function scanIssue() {
         if (mentionedCves.length === 0) {
             return 'Did not find any CVEs mentioned';
         }
-        yield addLabels(repoOwner, repoName, issueNumber, mentionedCves.map(formatLabelName));
+        yield addLabels(issueContext, mentionedCves.map(formatLabelName));
         const recs = yield (0, tidelift_recommendation_1.getTideliftRecommendations)(mentionedCves);
         if (recs.length === 0) {
             return `Did not find any Tidelift recommendations for CVEs: ${mentionedCves}`;
         }
-        yield addComment(repoOwner, repoName, issueNumber, formatRecommendationsComment(recs));
+        for (const rec of recs) {
+            yield createRecommendationCommentIfNeeded(issueContext, rec);
+        }
         return `Found: ${mentionedCves}; Recs: ${recs}`;
     });
 }
