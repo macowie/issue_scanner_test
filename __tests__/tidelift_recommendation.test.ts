@@ -1,15 +1,14 @@
 import {expect, test} from '@jest/globals'
+import {getInput} from '@actions/core'
+import * as dotenv from 'dotenv'
 import {VulnerabilityId} from '../src/main'
 import {
   fetchTideliftRecommendation,
   fetchTideliftRecommendations,
   TideliftRecommendation
 } from '../src/tidelift_recommendation'
-import {getInput} from '@actions/core'
-import * as dotenv from 'dotenv'
 dotenv.config()
 
-// const githubToken = getInput('repo-token') || process.env.GITHUB_TOKEN
 const tideliftToken =
   getInput('tidelift-token') || process.env.TIDELIFT_TOKEN || 'NO_TOKEN'
 
@@ -20,6 +19,7 @@ test('fetchTideliftRecommendation', async () => {
   expect(await fetchTideliftRecommendation(fakeVuln, tideliftToken)).toBe(
     undefined
   )
+
   expect(
     await fetchTideliftRecommendation(realVuln, tideliftToken)
   ).toBeInstanceOf(TideliftRecommendation)

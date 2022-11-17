@@ -279,13 +279,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.fetchTideliftRecommendations = exports.fetchTideliftRecommendation = exports.TideliftRecommendation = void 0;
 const core_1 = __nccwpck_require__(2186);
-const axios_1 = __importDefault(__nccwpck_require__(8757));
+const utils_1 = __nccwpck_require__(918);
 class TideliftRecommendation {
     constructor(vuln_id, recommendationData) {
         this.vuln_id = vuln_id;
@@ -312,7 +309,6 @@ class TideliftRecommendation {
 }
 exports.TideliftRecommendation = TideliftRecommendation;
 function fetchTideliftRecommendation(vuln_id, tideliftToken) {
-    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         const config = {
             headers: {
@@ -320,11 +316,11 @@ function fetchTideliftRecommendation(vuln_id, tideliftToken) {
             }
         };
         try {
-            const response = yield axios_1.default.get(`https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`, config);
+            const response = yield (0, utils_1.fetchUrl)(`https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`, config);
             return new TideliftRecommendation(vuln_id, response.data);
         }
         catch (err) {
-            if (axios_1.default.isAxiosError(err) && ((_a = err.response) === null || _a === void 0 ? void 0 : _a.status) === 404) {
+            if ((0, utils_1.is404)(err)) {
                 (0, core_1.info)(`Did not find Tidelift recommendation for: ${vuln_id}`);
                 return;
             }
@@ -340,6 +336,41 @@ function fetchTideliftRecommendations(vuln_ids, tideliftToken) {
     });
 }
 exports.fetchTideliftRecommendations = fetchTideliftRecommendations;
+
+
+/***/ }),
+
+/***/ 918:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.is404 = exports.fetchUrl = void 0;
+const axios_1 = __importDefault(__nccwpck_require__(8757));
+function fetchUrl(url, config) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return axios_1.default.get(url, config);
+    });
+}
+exports.fetchUrl = fetchUrl;
+function is404(err) {
+    var _a;
+    return axios_1.default.isAxiosError(err) && ((_a = err.response) === null || _a === void 0 ? void 0 : _a.status) === 404;
+}
+exports.is404 = is404;
 
 
 /***/ }),

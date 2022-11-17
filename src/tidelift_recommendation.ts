@@ -1,6 +1,6 @@
 import {VulnerabilityId} from './main'
 import {error, info} from '@actions/core'
-import {default as axios} from 'axios'
+import {fetchUrl, is404} from './utils'
 export class TideliftRecommendation {
   vuln_id: VulnerabilityId
   description: string
@@ -53,13 +53,13 @@ export async function fetchTideliftRecommendation(
   }
 
   try {
-    const response = await axios.get(
+    const response = await fetchUrl(
       `https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`,
       config
     )
     return new TideliftRecommendation(vuln_id, response.data)
   } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.status === 404) {
+    if (is404(err)) {
       info(`Did not find Tidelift recommendation for: ${vuln_id}`)
       return
     }
