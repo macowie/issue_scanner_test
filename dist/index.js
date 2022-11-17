@@ -1,34 +1,11 @@
 require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
 
-/***/ 3109:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ 1667:
+/***/ (function(__unused_webpack_module, exports) {
 
 "use strict";
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -39,30 +16,109 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createRecommendationCommentIfNeeded = void 0;
+function formatRecommendationText(recommendation) {
+    return `:wave: Looks like you're reporting ${recommendation.vuln_id}.\n\n${JSON.stringify(recommendation)}`;
+}
+function createRecommendationCommentIfNeeded(issue, rec) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const comments = yield issue.fetchComments();
+        if (!comments) {
+            return;
+        }
+        const botComments = comments.filter(comment => {
+            return (isBotReportComment(comment) &&
+                commentIncludesText(comment, rec.vuln_id.id));
+        });
+        if (botComments.length === 0)
+            return issue.addComment(formatRecommendationText(rec));
+    });
+}
+exports.createRecommendationCommentIfNeeded = createRecommendationCommentIfNeeded;
+function isBotReportComment(comment) {
+    var _a;
+    return ((_a = comment.user) === null || _a === void 0 ? void 0 : _a.login) === 'github-actions[bot]';
+}
+function commentIncludesText(comment, query) {
+    var _a;
+    return (_a = comment.body) === null || _a === void 0 ? void 0 : _a.includes(query);
+}
+
+
+/***/ }),
+
+/***/ 6018:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Issue = exports.getCurrentIssue = exports.IssueNotFoundError = void 0;
 const core_1 = __nccwpck_require__(2186);
-const github = __importStar(__nccwpck_require__(5438));
-const tidelift_recommendation_1 = __nccwpck_require__(6190);
+const github_1 = __nccwpck_require__(5438);
 class IssueNotFoundError extends Error {
 }
-const myToken = (0, core_1.getInput)('repo-token');
-const octokit = github.getOctokit(myToken);
-function getIssue(issueContext) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return octokit.rest.issues.get(issueContext);
-    });
+exports.IssueNotFoundError = IssueNotFoundError;
+function getCurrentIssue(octokit) {
+    return new Issue(getIssueContext(github_1.context), octokit);
 }
-function addLabels(issueContext, labels) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return octokit.rest.issues.addLabels(Object.assign(Object.assign({}, issueContext), { labels }));
-    });
+exports.getCurrentIssue = getCurrentIssue;
+class Issue {
+    constructor(context, octokit) {
+        this.owner = context.owner;
+        this.repo = context.repo;
+        this.issue_number = context.issue_number;
+        this.octokit = octokit;
+    }
+    get context() {
+        return { owner: this.owner, repo: this.repo, issue_number: this.issue_number };
+    }
+    get hasAssignees() {
+        var _a;
+        return !!((_a = this.data) === null || _a === void 0 ? void 0 : _a.assignees) && this.data.assignees.length > 0;
+    }
+    addComment(body) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.octokit.rest.issues.createComment(Object.assign(Object.assign({}, this.context), { body }));
+        });
+    }
+    fetchComments() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { data } = yield this.octokit.rest.issues.listComments(this.context);
+            return data;
+        });
+    }
+    refreshData() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { data } = yield this.octokit.rest.issues.get(this.context);
+            this.data = data;
+            return this.data;
+        });
+    }
+    addLabels(labels) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.octokit.rest.issues.addLabels(Object.assign(Object.assign({}, this.context), { labels }));
+        });
+    }
 }
-function addComment(issueContext, body) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return octokit.rest.issues.createComment(Object.assign(Object.assign({}, issueContext), { body }));
-    });
-}
-function issueHasBeenAssigned(issue) {
-    return issue.data.assignees.length !== 0;
+exports.Issue = Issue;
+function getIssueContext(context) {
+    var _a, _b, _c, _d, _e;
+    const repo = (_b = (_a = context.payload) === null || _a === void 0 ? void 0 : _a.repository) === null || _b === void 0 ? void 0 : _b.name;
+    const owner = (_e = (_d = (_c = context.payload) === null || _c === void 0 ? void 0 : _c.repository) === null || _d === void 0 ? void 0 : _d.owner) === null || _e === void 0 ? void 0 : _e.login;
+    const issue_number = getIssueNumber(context);
+    if (repo && owner && issue_number)
+        return { repo, owner, issue_number };
+    throw new IssueNotFoundError();
 }
 function getIssueNumber(context) {
     var _a, _b, _c, _d;
@@ -73,83 +129,89 @@ function getIssueNumber(context) {
         return Number(possibleNumber);
     throw new IssueNotFoundError();
 }
-function getIssueContext(context) {
-    var _a, _b, _c, _d, _e;
-    const repo = (_b = (_a = context.payload) === null || _a === void 0 ? void 0 : _a.repository) === null || _b === void 0 ? void 0 : _b.name;
-    const owner = (_e = (_d = (_c = context.payload) === null || _c === void 0 ? void 0 : _c.repository) === null || _d === void 0 ? void 0 : _d.owner) === null || _e === void 0 ? void 0 : _e.login;
-    const issue_number = getIssueNumber(context);
-    if (repo && owner && issue_number)
-        return { repo, owner, issue_number };
-    throw new IssueNotFoundError();
+
+
+/***/ }),
+
+/***/ 3109:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.scanIssue = exports.findMentionedVulnerabilities = exports.VulnerabilityId = void 0;
+const core_1 = __nccwpck_require__(2186);
+const tidelift_recommendation_1 = __nccwpck_require__(6190);
+const issue_1 = __nccwpck_require__(6018);
+const comment_1 = __nccwpck_require__(1667);
+const github_1 = __nccwpck_require__(5438);
+const ignoreIfAssigned = (0, core_1.getInput)('ignore-if-assigned');
+function formatVulnerabilityLabel(vuln_id) {
+    return `:yellow_circle: ${vuln_id}`;
 }
-function findMentionedCves(issue) {
+function formatHasRecommenationLabel() {
+    return `:green_circle: has-recommendation`;
+}
+class VulnerabilityId {
+    constructor(str) {
+        this.id = str.toUpperCase();
+    }
+    toString() {
+        return this.id;
+    }
+}
+exports.VulnerabilityId = VulnerabilityId;
+function findMentionedVulnerabilities({ title, body }) {
     const regex = /CVE-[\d]+-[\d]+/gi;
-    const searchFields = ['body', 'title'];
-    return Array.from(new Set(searchFields
-        .map(field => issue.data[field])
+    return Array.from(new Set([title, body]
         .filter(field => typeof field === 'string')
         .flatMap(field => field.match(regex))
         .filter(field => field)
-        .map(vuln_id => vuln_id.toUpperCase())));
+        .map(vuln_id => new VulnerabilityId(vuln_id))));
 }
-function formatLabelName(vuln_id) {
-    return `:yellow_circle: ${vuln_id.toUpperCase()}`;
-}
-function formatRecommendationText(recommendation) {
-    return `:wave: Looks like you're reporting ${recommendation.vuln_id}.\n\n${JSON.stringify(recommendation)}`;
-}
-function createRecommendationCommentIfNeeded(issueContext, rec) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const comments = yield octokit.rest.issues.listComments(issueContext);
-        const botComments = comments.data.filter(comment => isBotReportComment(comment, rec.vuln_id));
-        if (botComments.length === 0)
-            return addComment(issueContext, formatRecommendationText(rec));
-    });
-}
-function isBotReportComment(comment, vuln_id) {
-    const actionsBot = 'github-actions[bot]';
-    return (comment.user.login === actionsBot &&
-        comment.body &&
-        comment.body.includes(vuln_id));
-}
+exports.findMentionedVulnerabilities = findMentionedVulnerabilities;
 function scanIssue() {
     return __awaiter(this, void 0, void 0, function* () {
-        const issueContext = getIssueContext(github.context);
-        // eslint-disable-next-line prefer-const
-        let ignoreIfAssigned = false;
-        // Refresh for latest changes
-        // eslint-disable-next-line prefer-const
-        let issue = yield getIssue(issueContext);
-        if (ignoreIfAssigned && issueHasBeenAssigned(issue)) {
+        const octokit = (0, github_1.getOctokit)((0, core_1.getInput)('repo-token'));
+        const issue = (0, issue_1.getCurrentIssue)(octokit);
+        if (ignoreIfAssigned && issue.hasAssignees) {
             return 'No action being taken. Ignoring because one or more assignees have been added to the issue';
         }
-        const mentionedCves = findMentionedCves(issue);
-        if (mentionedCves.length === 0) {
-            return 'Did not find any CVEs mentioned';
+        const mentionedVulns = findMentionedVulnerabilities(issue.data);
+        if (mentionedVulns.length === 0) {
+            return 'Did not find any vulnerabilities mentioned';
         }
-        const recs = yield (0, tidelift_recommendation_1.getTideliftRecommendations)(mentionedCves);
-        const labelsToAdd = mentionedCves.map(formatLabelName);
+        const recs = yield (0, tidelift_recommendation_1.getTideliftRecommendations)(mentionedVulns);
+        const labelsToAdd = mentionedVulns.map(formatVulnerabilityLabel);
         if (recs.length > 0) {
-            labelsToAdd.push('has-recommendation');
+            labelsToAdd.push(formatHasRecommenationLabel());
         }
         for (const rec of recs) {
-            yield createRecommendationCommentIfNeeded(issueContext, rec);
+            yield (0, comment_1.createRecommendationCommentIfNeeded)(issue, rec);
         }
-        yield addLabels(issueContext, labelsToAdd);
-        return `Found: ${mentionedCves}; Recs: ${recs.map(r => r.vuln_id)}`;
+        yield issue.addLabels(labelsToAdd);
+        return `Found: ${mentionedVulns}; Recs: ${recs.map(r => r.vuln_id)}`;
     });
 }
+exports.scanIssue = scanIssue;
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const message = yield scanIssue();
             (0, core_1.info)(message);
-            process.exit(0);
         }
         catch (error) {
-            if (error instanceof IssueNotFoundError) {
+            if (error instanceof issue_1.IssueNotFoundError) {
                 (0, core_1.notice)('Could not find current issue. Skipping.');
-                process.exit(0);
             }
             else if (error instanceof Error) {
                 (0, core_1.setFailed)(error);
@@ -170,29 +232,6 @@ run();
 
 "use strict";
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -205,7 +244,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getTideliftRecommendations = exports.getTideliftRecommendation = exports.TideliftRecommendation = void 0;
 const core_1 = __nccwpck_require__(2186);
-const axios_1 = __importStar(__nccwpck_require__(8757));
+const axios_1 = __nccwpck_require__(8757);
 class TideliftRecommendation {
     constructor(vuln_id, recommendationData) {
         this.vuln_id = vuln_id;
@@ -240,15 +279,14 @@ function getTideliftRecommendation(vuln_id) {
             }
         };
         try {
-            const response = yield axios_1.default.get(`https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`, config);
+            const response = yield new axios_1.Axios(config).get(`https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`);
             return new TideliftRecommendation(vuln_id, response.data);
         }
-        catch (error) {
-            if (error instanceof axios_1.AxiosError && ((_a = error.response) === null || _a === void 0 ? void 0 : _a.status) === 404) {
+        catch (err) {
+            if (err instanceof axios_1.AxiosError && ((_a = err.response) === null || _a === void 0 ? void 0 : _a.status) === 404) {
                 // Not Found
             }
-            // eslint-disable-next-line no-console
-            console.error(`Problem fetching Tidelift Recommendations for: ${vuln_id}`);
+            (0, core_1.error)(`Problem fetching Tidelift Recommendations for: ${vuln_id}`);
         }
     });
 }

@@ -1,6 +1,6 @@
 import {VulnerabilityId} from './main'
-import {getInput} from '@actions/core'
-import axios, {AxiosError} from 'axios'
+import {getInput, error} from '@actions/core'
+import {Axios, AxiosError} from 'axios'
 
 export class TideliftRecommendation {
   vuln_id: VulnerabilityId
@@ -19,7 +19,7 @@ export class TideliftRecommendation {
   real_issue: boolean
   false_positive_reason?: string
 
-  constructor(vuln_id: VulnerabilityId, recommendationData: Object) {
+  constructor(vuln_id: VulnerabilityId, recommendationData: {}) {
     this.vuln_id = vuln_id
     this.description = recommendationData['description']
     this.severity = recommendationData['severity']
@@ -52,19 +52,17 @@ export async function getTideliftRecommendation(
     }
   }
   try {
-    const response = await axios.get(
-      `https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`,
-      config
+    const response = await new Axios(config).get(
+      `https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`
     )
 
     return new TideliftRecommendation(vuln_id, response.data)
-  } catch (error) {
-    if (error instanceof AxiosError && error.response?.status === 404) {
+  } catch (err) {
+    if (err instanceof AxiosError && err.response?.status === 404) {
       // Not Found
     }
 
-    // eslint-disable-next-line no-console
-    console.error(`Problem fetching Tidelift Recommendations for: ${vuln_id}`)
+    error(`Problem fetching Tidelift Recommendations for: ${vuln_id}`)
   }
 }
 
