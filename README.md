@@ -1,4 +1,4 @@
-# Issue Scanner
+# Tidelift Issue Scanner
 
 Does helpful things when issues are opened
 
