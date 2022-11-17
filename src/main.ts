@@ -49,6 +49,7 @@ export async function scanIssue(): Promise<string> {
     return 'No action being taken. Ignoring because one or more assignees have been added to the issue'
   }
 
+  issue.refreshData()
   const mentionedVulns = findMentionedVulnerabilities(issue.data)
 
   if (mentionedVulns.length === 0) {
