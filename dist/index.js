@@ -186,6 +186,7 @@ function scanIssue() {
         if (ignoreIfAssigned && issue.hasAssignees) {
             return 'No action being taken. Ignoring because one or more assignees have been added to the issue';
         }
+        issue.refreshData();
         const mentionedVulns = findMentionedVulnerabilities(issue.data);
         if (mentionedVulns.length === 0) {
             return 'Did not find any vulnerabilities mentioned';
