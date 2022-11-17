@@ -138,6 +138,29 @@ function getIssueNumber(context) {
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -150,10 +173,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.scanIssue = exports.findMentionedVulnerabilities = exports.VulnerabilityId = void 0;
 const core_1 = __nccwpck_require__(2186);
+const github_1 = __nccwpck_require__(5438);
+const dotenv = __importStar(__nccwpck_require__(2437));
 const tidelift_recommendation_1 = __nccwpck_require__(6190);
 const issue_1 = __nccwpck_require__(6018);
 const comment_1 = __nccwpck_require__(1667);
-const github_1 = __nccwpck_require__(5438);
+dotenv.config();
 const ignoreIfAssigned = (0, core_1.getInput)('ignore-if-assigned');
 function formatVulnerabilityLabel(vuln_id) {
     return `:yellow_circle: ${vuln_id}`;
@@ -181,7 +206,12 @@ function findMentionedVulnerabilities({ title, body }) {
 exports.findMentionedVulnerabilities = findMentionedVulnerabilities;
 function scanIssue() {
     return __awaiter(this, void 0, void 0, function* () {
-        const octokit = (0, github_1.getOctokit)((0, core_1.getInput)('repo-token'));
+        const githubToken = (0, core_1.getInput)('repo-token') || process.env.GITHUB_TOKEN;
+        const tideliftToken = (0, core_1.getInput)('tidelift-token') || process.env.TIDELIFT_TOKEN;
+        if (!githubToken) {
+            return 'Could not initialize Github API Client';
+        }
+        const octokit = (0, github_1.getOctokit)(githubToken);
         const issue = (0, issue_1.getCurrentIssue)(octokit);
         if (ignoreIfAssigned && issue.hasAssignees) {
             return 'No action being taken. Ignoring because one or more assignees have been added to the issue';
@@ -191,16 +221,23 @@ function scanIssue() {
         if (mentionedVulns.length === 0) {
             return 'Did not find any vulnerabilities mentioned';
         }
-        const recs = yield (0, tidelift_recommendation_1.getTideliftRecommendations)(mentionedVulns);
+        let successMessage = `Found: ${mentionedVulns}`;
         const labelsToAdd = mentionedVulns.map(formatVulnerabilityLabel);
-        if (recs.length > 0) {
-            labelsToAdd.push(formatHasRecommenationLabel());
+        if (!tideliftToken) {
+            (0, core_1.info)('No Tidelift token provided, skipping recommendation scan.');
         }
-        for (const rec of recs) {
-            yield (0, comment_1.createRecommendationCommentIfNeeded)(issue, rec);
+        else {
+            const recs = yield (0, tidelift_recommendation_1.fetchTideliftRecommendations)(mentionedVulns, tideliftToken);
+            if (recs.length > 0) {
+                labelsToAdd.push(formatHasRecommenationLabel());
+            }
+            for (const rec of recs) {
+                yield (0, comment_1.createRecommendationCommentIfNeeded)(issue, rec);
+            }
+            successMessage += `; Recs: ${recs.map(r => r.vuln_id)}`;
         }
         yield issue.addLabels(labelsToAdd);
-        return `Found: ${mentionedVulns}; Recs: ${recs.map(r => r.vuln_id)}`;
+        return successMessage;
     });
 }
 exports.scanIssue = scanIssue;
@@ -242,10 +279,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getTideliftRecommendations = exports.getTideliftRecommendation = exports.TideliftRecommendation = void 0;
+exports.fetchTideliftRecommendations = exports.fetchTideliftRecommendation = exports.TideliftRecommendation = void 0;
 const core_1 = __nccwpck_require__(2186);
-const axios_1 = __nccwpck_require__(8757);
+const axios_1 = __importDefault(__nccwpck_require__(8757));
 class TideliftRecommendation {
     constructor(vuln_id, recommendationData) {
         this.vuln_id = vuln_id;
@@ -271,7 +311,7 @@ class TideliftRecommendation {
     }
 }
 exports.TideliftRecommendation = TideliftRecommendation;
-function getTideliftRecommendation(vuln_id) {
+function fetchTideliftRecommendation(vuln_id, tideliftToken) {
     var _a;
     return __awaiter(this, void 0, void 0, function* () {
         const config = {
@@ -280,26 +320,26 @@ function getTideliftRecommendation(vuln_id) {
             }
         };
         try {
-            const response = yield new axios_1.Axios(config).get(`https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`);
+            const response = yield axios_1.default.get(`https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`, config);
             return new TideliftRecommendation(vuln_id, response.data);
         }
         catch (err) {
-            if (err instanceof axios_1.AxiosError && ((_a = err.response) === null || _a === void 0 ? void 0 : _a.status) === 404) {
-                // Not Found
+            if (axios_1.default.isAxiosError(err) && ((_a = err.response) === null || _a === void 0 ? void 0 : _a.status) === 404) {
+                (0, core_1.info)(`Did not find Tidelift recommendation for: ${vuln_id}`);
+                return;
             }
-            (0, core_1.error)(`Problem fetching Tidelift Recommendations for: ${vuln_id}`);
+            (0, core_1.error)(`Problem fetching Tidelift recommendation for: ${vuln_id}`);
         }
     });
 }
-exports.getTideliftRecommendation = getTideliftRecommendation;
-function getTideliftRecommendations(vuln_ids) {
+exports.fetchTideliftRecommendation = fetchTideliftRecommendation;
+function fetchTideliftRecommendations(vuln_ids, tideliftToken) {
     return __awaiter(this, void 0, void 0, function* () {
-        const recs = yield Promise.all(vuln_ids.map(getTideliftRecommendation));
+        const recs = yield Promise.all(vuln_ids.map((vuln_id) => __awaiter(this, void 0, void 0, function* () { return fetchTideliftRecommendation(vuln_id, tideliftToken); })));
         return recs.filter(r => r instanceof TideliftRecommendation);
     });
 }
-exports.getTideliftRecommendations = getTideliftRecommendations;
-const tideliftToken = (0, core_1.getInput)('tidelift-token');
+exports.fetchTideliftRecommendations = fetchTideliftRecommendations;
 
 
 /***/ }),
@@ -6466,6 +6506,125 @@ class Deprecation extends Error {
 }
 
 exports.Deprecation = Deprecation;
+
+
+/***/ }),
+
+/***/ 2437:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const fs = __nccwpck_require__(7147)
+const path = __nccwpck_require__(1017)
+const os = __nccwpck_require__(2037)
+const packageJson = __nccwpck_require__(9968)
+
+const version = packageJson.version
+
+const LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg
+
+// Parser src into an Object
+function parse (src) {
+  const obj = {}
+
+  // Convert buffer to string
+  let lines = src.toString()
+
+  // Convert line breaks to same format
+  lines = lines.replace(/\r\n?/mg, '\n')
+
+  let match
+  while ((match = LINE.exec(lines)) != null) {
+    const key = match[1]
+
+    // Default undefined or null to empty string
+    let value = (match[2] || '')
+
+    // Remove whitespace
+    value = value.trim()
+
+    // Check if double quoted
+    const maybeQuote = value[0]
+
+    // Remove surrounding quotes
+    value = value.replace(/^(['"`])([\s\S]*)\1$/mg, '$2')
+
+    // Expand newlines if double quoted
+    if (maybeQuote === '"') {
+      value = value.replace(/\\n/g, '\n')
+      value = value.replace(/\\r/g, '\r')
+    }
+
+    // Add to object
+    obj[key] = value
+  }
+
+  return obj
+}
+
+function _log (message) {
+  console.log(`[dotenv@${version}][DEBUG] ${message}`)
+}
+
+function _resolveHome (envPath) {
+  return envPath[0] === '~' ? path.join(os.homedir(), envPath.slice(1)) : envPath
+}
+
+// Populates process.env from .env file
+function config (options) {
+  let dotenvPath = path.resolve(process.cwd(), '.env')
+  let encoding = 'utf8'
+  const debug = Boolean(options && options.debug)
+  const override = Boolean(options && options.override)
+
+  if (options) {
+    if (options.path != null) {
+      dotenvPath = _resolveHome(options.path)
+    }
+    if (options.encoding != null) {
+      encoding = options.encoding
+    }
+  }
+
+  try {
+    // Specifying an encoding returns a string instead of a buffer
+    const parsed = DotenvModule.parse(fs.readFileSync(dotenvPath, { encoding }))
+
+    Object.keys(parsed).forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(process.env, key)) {
+        process.env[key] = parsed[key]
+      } else {
+        if (override === true) {
+          process.env[key] = parsed[key]
+        }
+
+        if (debug) {
+          if (override === true) {
+            _log(`"${key}" is already defined in \`process.env\` and WAS overwritten`)
+          } else {
+            _log(`"${key}" is already defined in \`process.env\` and was NOT overwritten`)
+          }
+        }
+      }
+    })
+
+    return { parsed }
+  } catch (e) {
+    if (debug) {
+      _log(`Failed to load ${dotenvPath} ${e.message}`)
+    }
+
+    return { error: e }
+  }
+}
+
+const DotenvModule = {
+  config,
+  parse
+}
+
+module.exports.config = DotenvModule.config
+module.exports.parse = DotenvModule.parse
+module.exports = DotenvModule
 
 
 /***/ }),
@@ -17163,6 +17322,14 @@ axios.formToJSON = thing => {
 module.exports = axios;
 //# sourceMappingURL=axios.cjs.map
 
+
+/***/ }),
+
+/***/ 9968:
+/***/ ((module) => {
+
+"use strict";
+module.exports = JSON.parse('{"name":"dotenv","version":"16.0.3","description":"Loads environment variables from .env file","main":"lib/main.js","types":"lib/main.d.ts","exports":{".":{"require":"./lib/main.js","types":"./lib/main.d.ts","default":"./lib/main.js"},"./config":"./config.js","./config.js":"./config.js","./lib/env-options":"./lib/env-options.js","./lib/env-options.js":"./lib/env-options.js","./lib/cli-options":"./lib/cli-options.js","./lib/cli-options.js":"./lib/cli-options.js","./package.json":"./package.json"},"scripts":{"dts-check":"tsc --project tests/types/tsconfig.json","lint":"standard","lint-readme":"standard-markdown","pretest":"npm run lint && npm run dts-check","test":"tap tests/*.js --100 -Rspec","prerelease":"npm test","release":"standard-version"},"repository":{"type":"git","url":"git://github.com/motdotla/dotenv.git"},"keywords":["dotenv","env",".env","environment","variables","config","settings"],"readmeFilename":"README.md","license":"BSD-2-Clause","devDependencies":{"@types/node":"^17.0.9","decache":"^4.6.1","dtslint":"^3.7.0","sinon":"^12.0.1","standard":"^16.0.4","standard-markdown":"^7.1.0","standard-version":"^9.3.2","tap":"^15.1.6","tar":"^6.1.11","typescript":"^4.5.4"},"engines":{"node":">=12"}}');
 
 /***/ }),
 

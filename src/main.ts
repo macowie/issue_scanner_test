@@ -1,9 +1,11 @@
 import {getInput, setFailed, notice, info} from '@actions/core'
+import {getOctokit} from '@actions/github'
+import * as dotenv from 'dotenv'
 
-import {getTideliftRecommendations} from './tidelift_recommendation'
+import {fetchTideliftRecommendations} from './tidelift_recommendation'
 import {getCurrentIssue, IssueNotFoundError} from './issue'
 import {createRecommendationCommentIfNeeded} from './comment'
-import {getOctokit} from '@actions/github'
+dotenv.config()
 
 const ignoreIfAssigned = getInput('ignore-if-assigned')
 
@@ -42,7 +44,14 @@ export function findMentionedVulnerabilities({title, body}): VulnerabilityId[] {
 }
 
 export async function scanIssue(): Promise<string> {
-  const octokit = getOctokit(getInput('repo-token'))
+  const githubToken = getInput('repo-token') || process.env.GITHUB_TOKEN
+  const tideliftToken = getInput('tidelift-token') || process.env.TIDELIFT_TOKEN
+
+  if (!githubToken) {
+    return 'Could not initialize Github API Client'
+  }
+
+  const octokit = getOctokit(githubToken)
   const issue = getCurrentIssue(octokit)
 
   if (ignoreIfAssigned && issue.hasAssignees) {
@@ -56,20 +65,29 @@ export async function scanIssue(): Promise<string> {
     return 'Did not find any vulnerabilities mentioned'
   }
 
-  const recs = await getTideliftRecommendations(mentionedVulns)
+  let successMessage = `Found: ${mentionedVulns}`
   const labelsToAdd = mentionedVulns.map(formatVulnerabilityLabel)
 
-  if (recs.length > 0) {
-    labelsToAdd.push(formatHasRecommenationLabel())
-  }
+  if (!tideliftToken) {
+    info('No Tidelift token provided, skipping recommendation scan.')
+  } else {
+    const recs = await fetchTideliftRecommendations(
+      mentionedVulns,
+      tideliftToken
+    )
+    if (recs.length > 0) {
+      labelsToAdd.push(formatHasRecommenationLabel())
+    }
 
-  for (const rec of recs) {
-    await createRecommendationCommentIfNeeded(issue, rec)
+    for (const rec of recs) {
+      await createRecommendationCommentIfNeeded(issue, rec)
+    }
+    successMessage += `; Recs: ${recs.map(r => r.vuln_id)}`
   }
 
   await issue.addLabels(labelsToAdd)
 
-  return `Found: ${mentionedVulns}; Recs: ${recs.map(r => r.vuln_id)}`
+  return successMessage
 }
 
 async function run(): Promise<void> {

@@ -1,7 +1,6 @@
 import {VulnerabilityId} from './main'
-import {getInput, error} from '@actions/core'
-import {Axios, AxiosError} from 'axios'
-
+import {error, info} from '@actions/core'
+import {default as axios} from 'axios'
 export class TideliftRecommendation {
   vuln_id: VulnerabilityId
   description: string
@@ -43,36 +42,42 @@ export class TideliftRecommendation {
   }
 }
 
-export async function getTideliftRecommendation(
-  vuln_id: VulnerabilityId
+export async function fetchTideliftRecommendation(
+  vuln_id: VulnerabilityId,
+  tideliftToken: string
 ): Promise<TideliftRecommendation | undefined> {
   const config = {
     headers: {
       Authorization: `Bearer ${tideliftToken}`
     }
   }
-  try {
-    const response = await new Axios(config).get(
-      `https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`
-    )
 
+  try {
+    const response = await axios.get(
+      `https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`,
+      config
+    )
     return new TideliftRecommendation(vuln_id, response.data)
   } catch (err) {
-    if (err instanceof AxiosError && err.response?.status === 404) {
-      // Not Found
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      info(`Did not find Tidelift recommendation for: ${vuln_id}`)
+      return
     }
-
-    error(`Problem fetching Tidelift Recommendations for: ${vuln_id}`)
+    error(`Problem fetching Tidelift recommendation for: ${vuln_id}`)
   }
 }
 
-export async function getTideliftRecommendations(
-  vuln_ids: VulnerabilityId[]
+export async function fetchTideliftRecommendations(
+  vuln_ids: VulnerabilityId[],
+  tideliftToken: string
 ): Promise<TideliftRecommendation[]> {
-  const recs = await Promise.all(vuln_ids.map(getTideliftRecommendation))
+  const recs = await Promise.all(
+    vuln_ids.map(async vuln_id =>
+      fetchTideliftRecommendation(vuln_id, tideliftToken)
+    )
+  )
+
   return recs.filter(
     r => r instanceof TideliftRecommendation
   ) as TideliftRecommendation[]
 }
-
-const tideliftToken = getInput('tidelift-token')
