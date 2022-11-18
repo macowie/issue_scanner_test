@@ -15,9 +15,9 @@ jobs:
           npm install
       - run: |
           npm run all
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          tidelift-token: ${{ secrets.TIDELIFT_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TIDELIFT_TOKEN: ${{ secrets.TIDELIFT_TOKEN }}
 
   sample_run: # make sure the action works on a clean machine without building
     runs-on: ubuntu-latest
