@@ -1,4 +1,4 @@
-import {VulnerabilityId} from './main'
+import {VulnerabilityId} from './vulnerability'
 import {error, info} from '@actions/core'
 import {fetchUrl, is404} from './utils'
 export class TideliftRecommendation {

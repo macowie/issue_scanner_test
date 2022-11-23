@@ -5,6 +5,8 @@ import * as dotenv from 'dotenv'
 import {fetchTideliftRecommendations} from './tidelift_recommendation'
 import {getCurrentIssue, IssueNotFoundError} from './issue'
 import {createRecommendationCommentIfNeeded} from './comment'
+import {findMentionedVulnerabilities, VulnerabilityId} from './vulnerability'
+
 dotenv.config()
 
 const ignoreIfAssigned = getInput('ignore-if-assigned')
@@ -15,32 +17,6 @@ function formatVulnerabilityLabel(vuln_id: VulnerabilityId): string {
 
 function formatHasRecommenationLabel(): string {
   return `:green_circle: has-recommendation`
-}
-
-export class VulnerabilityId {
-  id: string
-
-  constructor(str) {
-    this.id = str.toUpperCase()
-  }
-
-  toString(): string {
-    return this.id
-  }
-}
-
-export function findMentionedVulnerabilities({title, body}): VulnerabilityId[] {
-  const regex = /CVE-[\d]+-[\d]+/gi
-
-  return Array.from(
-    new Set(
-      [title, body]
-        .filter(field => typeof field === 'string')
-        .flatMap(field => field.match(regex))
-        .filter(field => field)
-        .map(vuln_id => new VulnerabilityId(vuln_id))
-    )
-  )
 }
 
 export async function scanIssue(): Promise<string> {
