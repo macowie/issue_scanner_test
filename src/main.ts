@@ -59,7 +59,8 @@ export async function scanIssue(): Promise<string> {
   }
 
   await issue.refreshData()
-  const mentionedVulns = findMentionedVulnerabilities(issue.data)
+
+  const mentionedVulns = findMentionedVulnerabilities(issue.searchableText)
 
   if (mentionedVulns.length === 0) {
     return 'Did not find any vulnerabilities mentioned'

@@ -1,5 +1,6 @@
 import {getInput} from '@actions/core'
 import {context as githubContext} from '@actions/github'
+import {notBlank} from './utils'
 
 export type IssueNumber = number
 export type RepoOwner = string
@@ -36,6 +37,11 @@ export class Issue {
 
   get hasAssignees(): boolean {
     return !!this.data?.assignees && this.data.assignees.length > 0
+  }
+
+  get searchableText(): string[] {
+    const searchableFields = ['title', 'body']
+    return searchableFields.map(field => this.data[field]).filter(notBlank)
   }
 
   async addComment(body: string): Promise<{} | undefined> {
