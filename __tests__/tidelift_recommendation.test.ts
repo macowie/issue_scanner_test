@@ -1,7 +1,7 @@
 import {expect, test} from '@jest/globals'
 import {getInput} from '@actions/core'
 import * as dotenv from 'dotenv'
-import {CveId} from '../src/vulnerability'
+import {VulnerabilityId} from '../src/vulnerability'
 import {
   fetchTideliftRecommendation,
   fetchTideliftRecommendations,
@@ -12,8 +12,8 @@ dotenv.config()
 const tideliftToken =
   getInput('tidelift-token') || process.env.TIDELIFT_TOKEN || 'NO_TOKEN'
 
-const fakeVuln = new CveId('CVE-5555-1234')
-const realVuln = new CveId('cve-2021-3807')
+const fakeVuln = new VulnerabilityId('CVE-5555-1234')
+const realVuln = new VulnerabilityId('cve-2021-3807')
 
 test('fetchTideliftRecommendation', async () => {
   expect(await fetchTideliftRecommendation(fakeVuln, tideliftToken)).toBe(

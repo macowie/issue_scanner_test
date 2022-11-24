@@ -36,7 +36,10 @@ export async function scanIssue(): Promise<string> {
 
   await issue.refreshData()
 
-  const mentionedVulns = findMentionedVulnerabilities(issue.searchableText)
+  const mentionedVulns = await findMentionedVulnerabilities(
+    issue.searchableText,
+    octokit
+  )
 
   if (mentionedVulns.length === 0) {
     return 'Did not find any vulnerabilities mentioned'

@@ -205,7 +205,7 @@ function scanIssue() {
             return 'No action being taken. Ignoring because one or more assignees have been added to the issue';
         }
         yield issue.refreshData();
-        const mentionedVulns = (0, vulnerability_1.findMentionedVulnerabilities)(issue.searchableText);
+        const mentionedVulns = yield (0, vulnerability_1.findMentionedVulnerabilities)(issue.searchableText, octokit);
         if (mentionedVulns.length === 0) {
             return 'Did not find any vulnerabilities mentioned';
         }
@@ -372,44 +372,71 @@ exports.notBlank = notBlank;
 /***/ }),
 
 /***/ 4819:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.findMentionedVulnerabilities = exports.GhsaId = exports.CveId = exports.VulnerabilityId = void 0;
+exports.getCveForGhsa = exports.findMentionedVulnerabilities = exports.VulnerabilityId = void 0;
 const utils_1 = __nccwpck_require__(918);
 class VulnerabilityId {
     constructor(str) {
+        this.equals = (other) => this.id === other.id;
+        this.toString = () => this.id;
         this.id = str;
-    }
-    toString() {
-        return this.id;
     }
 }
 exports.VulnerabilityId = VulnerabilityId;
-class CveId extends VulnerabilityId {
-    constructor(str) {
-        super(str.toUpperCase());
-    }
-    static scanner(text) {
-        const regex = /CVE-\d{4}-\d+/gi;
-        return (String(text).match(regex) || []).filter(utils_1.notBlank);
-    }
-}
-exports.CveId = CveId;
-class GhsaId extends VulnerabilityId {
-    static scanner(text) {
-        const regex = /GHSA-\w{4}-\w{4}-\w{4}/gi;
-        return (String(text).match(regex) || []).filter(utils_1.notBlank);
-    }
-}
-exports.GhsaId = GhsaId;
-function findMentionedVulnerabilities(fields) {
-    const vulnTypes = [CveId, GhsaId];
-    return vulnTypes.flatMap(vulnType => [...new Set(fields.flatMap(vulnType.scanner))].map(id => new vulnType(id)));
+function findMentionedVulnerabilities(fields, octokit) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const ids = fields.flatMap(scanCve).filter(utils_1.notBlank);
+        if (octokit) {
+            const ghsa_ids = new Set(fields.flatMap(scanGhsa));
+            for (const ghsa_id of ghsa_ids) {
+                const cve = yield getCveForGhsa(ghsa_id, octokit);
+                if (cve)
+                    ids.push(cve);
+            }
+        }
+        return [...new Set(ids)].map(id => new VulnerabilityId(id));
+    });
 }
 exports.findMentionedVulnerabilities = findMentionedVulnerabilities;
+function getCveForGhsa(ghsa_id, octokit) {
+    var _a;
+    return __awaiter(this, void 0, void 0, function* () {
+        const { securityAdvisory } = yield octokit.graphql(`{
+    securityAdvisory(ghsaId: "${ghsa_id}") {
+      id
+      identifiers {
+        type
+        value
+      }
+    }
+  }`);
+        return (_a = securityAdvisory.identifiers.find(i => i['type'] === 'CVE')) === null || _a === void 0 ? void 0 : _a.value;
+    });
+}
+exports.getCveForGhsa = getCveForGhsa;
+function scanGhsa(text) {
+    const regex = /GHSA-\w{4}-\w{4}-\w{4}/gi;
+    return (String(text).match(regex) || []).filter(utils_1.notBlank);
+}
+function scanCve(text) {
+    const regex = /CVE-\d{4}-\d+/gi;
+    return (String(text).match(regex) || [])
+        .filter(utils_1.notBlank)
+        .map(str => str.toUpperCase());
+}
 
 
 /***/ }),
