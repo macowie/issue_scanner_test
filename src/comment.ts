@@ -1,12 +1,19 @@
 import {TideliftRecommendation} from './tidelift_recommendation'
 import {Issue} from './issue'
 
-function formatRecommendationText(
+export function formatRecommendationText(
   recommendation: TideliftRecommendation
 ): string {
-  return `:wave: Looks like you're reporting ${
-    recommendation.vuln_id
-  }.\n\n${JSON.stringify(recommendation)}`
+  return `:wave: It looks like you are talking about ${recommendation.vuln_id}. I have more information to help you handle this CVE.
+
+Is this a legit issue with this project? ${recommendation.real_issue}
+${recommendation.false_positive_reason}
+
+How likely are you impacted (out of 10)? ${recommendation.impact_score}
+${recommendation.impact_description}
+
+Is there a workaround available? ${recommendation.workaround_available}
+${recommendation.workaround_description}`
 }
 
 export async function createRecommendationCommentIfNeeded(
