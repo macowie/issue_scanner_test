@@ -17,21 +17,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createRecommendationCommentIfNeeded = void 0;
-function formatRecommendationText(recommendation) {
-    return `:wave: Looks like you're reporting ${recommendation.vuln_id}.\n\n${JSON.stringify(recommendation)}`;
-}
-function createRecommendationCommentIfNeeded(issue, rec) {
+function createRecommendationCommentIfNeeded(issue, rec, github, template) {
     return __awaiter(this, void 0, void 0, function* () {
-        const comments = yield issue.fetchComments();
+        const comments = yield github.listComments(issue);
         if (!comments) {
             return;
         }
         const botComments = comments.filter(comment => {
             return (isBotReportComment(comment) &&
-                commentIncludesText(comment, rec.vuln_id.id));
+                commentIncludesText(comment, rec.vulnerability.id));
         });
         if (botComments.length === 0)
-            return issue.addComment(formatRecommendationText(rec));
+            return github.addComment(issue, template.call(rec));
     });
 }
 exports.createRecommendationCommentIfNeeded = createRecommendationCommentIfNeeded;
@@ -41,104 +38,13 @@ function isBotReportComment(comment) {
 }
 function commentIncludesText(comment, query) {
     var _a;
-    return (_a = comment.body) === null || _a === void 0 ? void 0 : _a.includes(query);
+    return !!((_a = comment.body) === null || _a === void 0 ? void 0 : _a.includes(query));
 }
 
 
 /***/ }),
 
-/***/ 6018:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Issue = exports.getCurrentIssue = exports.IssueNotFoundError = void 0;
-const core_1 = __nccwpck_require__(2186);
-const github_1 = __nccwpck_require__(5438);
-const utils_1 = __nccwpck_require__(918);
-class IssueNotFoundError extends Error {
-}
-exports.IssueNotFoundError = IssueNotFoundError;
-function getCurrentIssue(octokit) {
-    return new Issue(getIssueContext(github_1.context), octokit);
-}
-exports.getCurrentIssue = getCurrentIssue;
-class Issue {
-    constructor(context, octokit) {
-        this.owner = context.owner;
-        this.repo = context.repo;
-        this.issue_number = context.issue_number;
-        this.octokit = octokit;
-    }
-    get context() {
-        return { owner: this.owner, repo: this.repo, issue_number: this.issue_number };
-    }
-    get hasAssignees() {
-        var _a;
-        return !!((_a = this.data) === null || _a === void 0 ? void 0 : _a.assignees) && this.data.assignees.length > 0;
-    }
-    get searchableText() {
-        const searchableFields = ['title', 'body'];
-        return searchableFields.map(field => this.data[field]).filter(utils_1.notBlank);
-    }
-    addComment(body) {
-        return __awaiter(this, void 0, void 0, function* () {
-            return this.octokit.rest.issues.createComment(Object.assign(Object.assign({}, this.context), { body }));
-        });
-    }
-    fetchComments() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const { data } = yield this.octokit.rest.issues.listComments(this.context);
-            return data;
-        });
-    }
-    refreshData() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const { data } = yield this.octokit.rest.issues.get(this.context);
-            this.data = data;
-            return this.data;
-        });
-    }
-    addLabels(labels) {
-        return __awaiter(this, void 0, void 0, function* () {
-            return this.octokit.rest.issues.addLabels(Object.assign(Object.assign({}, this.context), { labels }));
-        });
-    }
-}
-exports.Issue = Issue;
-function getIssueContext(context) {
-    var _a, _b, _c, _d, _e;
-    const repo = (_b = (_a = context.payload) === null || _a === void 0 ? void 0 : _a.repository) === null || _b === void 0 ? void 0 : _b.name;
-    const owner = (_e = (_d = (_c = context.payload) === null || _c === void 0 ? void 0 : _c.repository) === null || _d === void 0 ? void 0 : _d.owner) === null || _e === void 0 ? void 0 : _e.login;
-    const issue_number = getIssueNumber(context);
-    if (repo && owner && issue_number)
-        return { repo, owner, issue_number };
-    throw new IssueNotFoundError();
-}
-function getIssueNumber(context) {
-    var _a, _b, _c, _d;
-    const possibleNumber = (0, core_1.getInput)('issue-number') ||
-        ((_b = (_a = context.payload) === null || _a === void 0 ? void 0 : _a.issue) === null || _b === void 0 ? void 0 : _b.number) ||
-        ((_d = (_c = context.payload) === null || _c === void 0 ? void 0 : _c.pull_request) === null || _d === void 0 ? void 0 : _d.number);
-    if (possibleNumber)
-        return Number(possibleNumber);
-    throw new IssueNotFoundError();
-}
-
-
-/***/ }),
-
-/***/ 3109:
+/***/ 5527:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -166,6 +72,153 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Configuration = void 0;
+const core_1 = __nccwpck_require__(2186);
+const dotenv = __importStar(__nccwpck_require__(2437));
+dotenv.config();
+class Configuration {
+    constructor(options) {
+        this.options = options;
+        const defaults = Configuration.defaults();
+        this.issue_number = options['issue_number'] || defaults['issue_number'];
+        this.github_token = options['github_token'] || defaults['github_token'];
+        this.tidelift_token =
+            options['tidelift_token'] || defaults['tidelift_token'];
+        this.ignore_if_assigned =
+            options['ignore_if_assigned'] || defaults['ignore_if_assigned'];
+        this.templates = options['templates'] || defaults['templates'];
+    }
+    static defaults() {
+        return {
+            issue_number: (0, core_1.getInput)('issue-number'),
+            ignore_if_assigned: isTruthy((0, core_1.getInput)('ignore-if-assigned')),
+            tidelift_token: (0, core_1.getInput)('tidelift-token') || process.env.TIDELIFT_TOKEN,
+            github_token: (0, core_1.getInput)('repo-token') || process.env.GITHUB_TOKEN,
+            templates: {
+                vuln_label: formatVulnerabilityLabel,
+                recommendation_body: formatRecommendationBody,
+                has_recommendation_label: formatHasRecommenationLabel
+            }
+        };
+    }
+}
+exports.Configuration = Configuration;
+function formatVulnerabilityLabel(vuln_id) {
+    return `:yellow_circle: ${vuln_id}`;
+}
+function formatHasRecommenationLabel() {
+    return `:green_circle: has-recommendation`;
+}
+function formatRecommendationBody(recommendation) {
+    return `:wave: It looks like you are talking about ${recommendation.vulnerability}. I have more information to help you handle this CVE.
+
+Is this a legit issue with this project? ${recommendation.real_issue}
+${recommendation.false_positive_reason}
+
+How likely are you impacted (out of 10)? ${recommendation.impact_score}
+${recommendation.impact_description}
+
+Is there a workaround available? ${recommendation.workaround_available}
+${recommendation.workaround_description}`;
+}
+function isTruthy(val) {
+    return ['true', 't', 'yes'].includes(String(val).toLowerCase());
+}
+
+
+/***/ }),
+
+/***/ 6125:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GithubClient = void 0;
+const github_1 = __nccwpck_require__(5438);
+class GithubClient {
+    constructor(token) {
+        this.octokit = (0, github_1.getOctokit)(token);
+    }
+    graphql(_a) {
+        var { query } = _a, options = __rest(_a, ["query"]);
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.octokit.graphql(Object.assign({ query }, options));
+        });
+    }
+    getCveForGhsa(ghsa_id) {
+        var _a;
+        return __awaiter(this, void 0, void 0, function* () {
+            const { securityAdvisory } = yield this.graphql({
+                query: `query advisoryIds($ghsa_id:String!) {
+        securityAdvisory(ghsaId: $ghsa_id) {
+           identifiers{
+             type
+             value
+           }
+         }        
+       }`,
+                ghsa_id
+            });
+            return (_a = securityAdvisory.identifiers.find(i => i['type'] === 'CVE')) === null || _a === void 0 ? void 0 : _a.value;
+        });
+    }
+    getIssue(context) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { data } = yield this.octokit.rest.issues.get(context);
+            return data;
+        });
+    }
+    listComments(context) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { data } = yield this.octokit.rest.issues.listComments(context);
+            return data;
+        });
+    }
+    addComment(context, body) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { data } = yield this.octokit.rest.issues.createComment(Object.assign(Object.assign({}, context), { body }));
+            return data;
+        });
+    }
+    addLabels(context, labels) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { data } = yield this.octokit.rest.issues.addLabels(Object.assign(Object.assign({}, context), { labels }));
+            return data;
+        });
+    }
+}
+exports.GithubClient = GithubClient;
+
+
+/***/ }),
+
+/***/ 6018:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -176,63 +229,89 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.scanIssue = void 0;
+exports.findCurrentIssue = exports.Issue = exports.IssueNotFoundError = void 0;
+const utils_1 = __nccwpck_require__(918);
+class IssueNotFoundError extends Error {
+}
+exports.IssueNotFoundError = IssueNotFoundError;
+class Issue {
+    constructor(context) {
+        this.owner = context.owner;
+        this.repo = context.repo;
+        this.issue_number = context.issue_number;
+    }
+    get context() {
+        return { owner: this.owner, repo: this.repo, issue_number: this.issue_number };
+    }
+    get hasAssignees() {
+        var _a;
+        return !!((_a = this.data) === null || _a === void 0 ? void 0 : _a.assignees) && this.data.assignees.length > 0;
+    }
+    get searchableText() {
+        const searchableFields = ['title', 'body'];
+        return searchableFields
+            .map(field => this.data && this.data[field])
+            .filter(utils_1.notBlank);
+    }
+    fetchData(github) {
+        return __awaiter(this, void 0, void 0, function* () {
+            this.data = yield github.getIssue(this.context);
+            return this.data;
+        });
+    }
+}
+exports.Issue = Issue;
+function findCurrentIssue(githubContext, issue_number) {
+    return new Issue(findIssueContext(githubContext, issue_number));
+}
+exports.findCurrentIssue = findCurrentIssue;
+function findIssueContext(context, issue_number) {
+    var _a, _b, _c, _d, _e;
+    const repo = (_b = (_a = context.payload) === null || _a === void 0 ? void 0 : _a.repository) === null || _b === void 0 ? void 0 : _b.name;
+    const owner = (_e = (_d = (_c = context.payload) === null || _c === void 0 ? void 0 : _c.repository) === null || _d === void 0 ? void 0 : _d.owner) === null || _e === void 0 ? void 0 : _e.login;
+    issue_number = findIssueNumber(context, issue_number);
+    if (repo && owner && issue_number)
+        return { repo, owner, issue_number };
+    throw new IssueNotFoundError();
+}
+function findIssueNumber(context, issue_number) {
+    var _a, _b, _c, _d;
+    const possibleNumber = issue_number ||
+        ((_b = (_a = context.payload) === null || _a === void 0 ? void 0 : _a.issue) === null || _b === void 0 ? void 0 : _b.number) ||
+        ((_d = (_c = context.payload) === null || _c === void 0 ? void 0 : _c.pull_request) === null || _d === void 0 ? void 0 : _d.number);
+    if (possibleNumber)
+        return Number(possibleNumber);
+    throw new IssueNotFoundError();
+}
+
+
+/***/ }),
+
+/***/ 3109:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core_1 = __nccwpck_require__(2186);
 const github_1 = __nccwpck_require__(5438);
-const dotenv = __importStar(__nccwpck_require__(2437));
-const tidelift_recommendation_1 = __nccwpck_require__(6190);
 const issue_1 = __nccwpck_require__(6018);
-const comment_1 = __nccwpck_require__(1667);
-const vulnerability_1 = __nccwpck_require__(4819);
-dotenv.config();
-const ignoreIfAssigned = (0, core_1.getInput)('ignore-if-assigned');
-function formatVulnerabilityLabel(vuln_id) {
-    return `:yellow_circle: ${vuln_id}`;
-}
-function formatHasRecommenationLabel() {
-    return `:green_circle: has-recommendation`;
-}
-function scanIssue() {
-    return __awaiter(this, void 0, void 0, function* () {
-        const githubToken = (0, core_1.getInput)('repo-token') || process.env.GITHUB_TOKEN;
-        const tideliftToken = (0, core_1.getInput)('tidelift-token') || process.env.TIDELIFT_TOKEN;
-        if (!githubToken) {
-            return 'Could not initialize Github API Client';
-        }
-        const octokit = (0, github_1.getOctokit)(githubToken);
-        const issue = (0, issue_1.getCurrentIssue)(octokit);
-        if (ignoreIfAssigned && issue.hasAssignees) {
-            return 'No action being taken. Ignoring because one or more assignees have been added to the issue';
-        }
-        yield issue.refreshData();
-        const mentionedVulns = yield (0, vulnerability_1.findMentionedVulnerabilities)(issue.searchableText, octokit);
-        if (mentionedVulns.length === 0) {
-            return 'Did not find any vulnerabilities mentioned';
-        }
-        let successMessage = `Found: ${mentionedVulns}`;
-        const labelsToAdd = mentionedVulns.map(formatVulnerabilityLabel);
-        if (!tideliftToken) {
-            (0, core_1.info)('No Tidelift token provided, skipping recommendation scan.');
-        }
-        else {
-            const recs = yield (0, tidelift_recommendation_1.fetchTideliftRecommendations)(mentionedVulns, tideliftToken);
-            if (recs.length > 0) {
-                labelsToAdd.push(formatHasRecommenationLabel());
-            }
-            for (const rec of recs) {
-                yield (0, comment_1.createRecommendationCommentIfNeeded)(issue, rec);
-            }
-            successMessage += `; Recs: ${recs.map(r => r.vuln_id)}`;
-        }
-        yield issue.addLabels(labelsToAdd);
-        return successMessage;
-    });
-}
-exports.scanIssue = scanIssue;
+const scanner_1 = __nccwpck_require__(7118);
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const message = yield scanIssue();
+            const scanner = new scanner_1.Scanner();
+            const issue = (0, issue_1.findCurrentIssue)(github_1.context, scanner.config.issue_number);
+            const message = yield scanner.perform(issue);
             (0, core_1.info)(message);
         }
         catch (error) {
@@ -253,7 +332,7 @@ run();
 
 /***/ }),
 
-/***/ 6190:
+/***/ 7118:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -268,67 +347,82 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.fetchTideliftRecommendations = exports.fetchTideliftRecommendation = exports.TideliftRecommendation = void 0;
-const core_1 = __nccwpck_require__(2186);
+exports.scanCve = exports.scanGhsa = exports.findMentionedVulnerabilities = exports.Scanner = void 0;
 const utils_1 = __nccwpck_require__(918);
-class TideliftRecommendation {
-    constructor(vuln_id, recommendationData) {
-        this.vuln_id = vuln_id;
-        this.description = recommendationData['description'];
-        this.severity = recommendationData['severity'];
-        this.recommendation_created_at =
-            recommendationData['recommendation_created_at'];
-        this.recommendation_updated_at =
-            recommendationData['recommendation_updated_at'];
-        this.impact_score = recommendationData['impact_score'];
-        this.impact_description = recommendationData['impact_description'];
-        this.other_conditions = recommendationData['other_conditions'];
-        this.other_conditions_description =
-            recommendationData['other_conditions_description'];
-        this.workaround_available = recommendationData['workaround_available'];
-        this.workaround_description = recommendationData['workaround_description'];
-        this.specific_methods_affected =
-            recommendationData['specific_methods_affected'];
-        this.specific_methods_description =
-            recommendationData['specific_methods_description'];
-        this.real_issue = recommendationData['real_issue'];
-        this.false_positive_reason = recommendationData['false_positive_reason'];
+const configuration_1 = __nccwpck_require__(5527);
+const vulnerability_1 = __nccwpck_require__(4819);
+const comment_1 = __nccwpck_require__(1667);
+const tidelift_client_1 = __nccwpck_require__(9061);
+const github_client_1 = __nccwpck_require__(6125);
+const core_1 = __nccwpck_require__(2186);
+class Scanner {
+    constructor(options) {
+        this.config = new configuration_1.Configuration(options);
+        this.github = new github_client_1.GithubClient(this.config.github_token);
+    }
+    perform(issue) {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield issue.fetchData(this.github);
+            if (this.config.ignore_if_assigned && issue.hasAssignees) {
+                return 'No action being taken. Ignoring because one or more assignees have been added to the issue';
+            }
+            const mentionedVulns = yield findMentionedVulnerabilities(issue.searchableText, this.github);
+            if (mentionedVulns.length === 0) {
+                return 'Did not find any vulnerabilities mentioned';
+            }
+            const labelsToAdd = mentionedVulns.map(vuln => this.config.templates.vuln_label(vuln.id));
+            let msg = `Found mentions of: ${mentionedVulns}`;
+            if (!this.config.tidelift_token) {
+                (0, core_1.info)('No Tidelift token provided, skipping recommendation scan.');
+            }
+            else {
+                this.tidelift = new tidelift_client_1.TideliftClient(this.config.tidelift_token);
+                const recommendations = yield this.tidelift.fetchRecommendations(mentionedVulns);
+                if (recommendations.length > 0) {
+                    labelsToAdd.push(this.config.templates.has_recommendation_label());
+                }
+                for (const rec of recommendations) {
+                    yield (0, comment_1.createRecommendationCommentIfNeeded)(issue, rec, this.github, this.config.templates.recommendation_body);
+                }
+                msg += `\nWith recommendations on: ${recommendations.map(r => r.vulnerability)}`;
+            }
+            yield this.github.addLabels(issue, labelsToAdd);
+            return msg;
+        });
     }
 }
-exports.TideliftRecommendation = TideliftRecommendation;
-function fetchTideliftRecommendation(vuln_id, tideliftToken) {
+exports.Scanner = Scanner;
+function findMentionedVulnerabilities(fields, github) {
     return __awaiter(this, void 0, void 0, function* () {
-        const config = {
-            headers: {
-                Authorization: `Bearer ${tideliftToken}`
+        const cve_ids = new Set(fields.flatMap(scanCve));
+        const ghsa_ids = new Set(fields.flatMap(scanGhsa));
+        if (github && ghsa_ids.size > 0) {
+            const translated_ids = yield (0, utils_1.concurrently)([...ghsa_ids], (ghsa_id) => __awaiter(this, void 0, void 0, function* () { return github.getCveForGhsa(ghsa_id); }));
+            for (const cve_id of translated_ids) {
+                cve_ids.add(cve_id);
             }
-        };
-        try {
-            const response = yield (0, utils_1.fetchUrl)(`https://api.tidelift.com/external-api/v1/vulnerability/${vuln_id}/recommendation`, config);
-            return new TideliftRecommendation(vuln_id, response.data);
         }
-        catch (err) {
-            if ((0, utils_1.is404)(err)) {
-                (0, core_1.info)(`Did not find Tidelift recommendation for: ${vuln_id}`);
-                return;
-            }
-            (0, core_1.error)(`Problem fetching Tidelift recommendation for: ${vuln_id}`);
-        }
+        return [...cve_ids].map(id => new vulnerability_1.Vulnerability(id));
     });
 }
-exports.fetchTideliftRecommendation = fetchTideliftRecommendation;
-function fetchTideliftRecommendations(vuln_ids, tideliftToken) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const recs = yield Promise.all(vuln_ids.map((vuln_id) => __awaiter(this, void 0, void 0, function* () { return fetchTideliftRecommendation(vuln_id, tideliftToken); })));
-        return recs.filter(r => r instanceof TideliftRecommendation);
-    });
+exports.findMentionedVulnerabilities = findMentionedVulnerabilities;
+function scanGhsa(text) {
+    const regex = /GHSA-\w{4}-\w{4}-\w{4}/gi;
+    return (String(text).match(regex) || []).filter(utils_1.notBlank);
 }
-exports.fetchTideliftRecommendations = fetchTideliftRecommendations;
+exports.scanGhsa = scanGhsa;
+function scanCve(text) {
+    const regex = /CVE-\d{4}-\d+/gi;
+    return (String(text).match(regex) || [])
+        .filter(utils_1.notBlank)
+        .map(str => str.toUpperCase());
+}
+exports.scanCve = scanCve;
 
 
 /***/ }),
 
-/***/ 918:
+/***/ 9061:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -346,33 +440,74 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.notBlank = exports.is404 = exports.fetchUrl = void 0;
+exports.TideliftClient = void 0;
 const axios_1 = __importDefault(__nccwpck_require__(8757));
-function fetchUrl(url, config) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return axios_1.default.get(url, config);
-    });
+const tidelift_recommendation_1 = __nccwpck_require__(6190);
+const utils_1 = __nccwpck_require__(918);
+class TideliftClient {
+    constructor(token) {
+        this.token = token;
+        this.client = axios_1.default.create({
+            baseURL: 'https://api.tidelift.com/external-api/v1',
+            headers: {
+                Authorization: `Bearer ${token}`
+            },
+            validateStatus: status => (status >= 200 && status < 300) || status === 404
+        });
+    }
+    fetchRecommendation(vuln) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const response = yield this.client.get(`/vulnerability/${vuln.id}/recommendation`);
+            if (response.status === 404) {
+                return;
+            }
+            return new tidelift_recommendation_1.TideliftRecommendation(vuln, response.data);
+        });
+    }
+    fetchRecommendations(vulns) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return yield (0, utils_1.concurrently)(vulns, (vuln) => __awaiter(this, void 0, void 0, function* () { return this.fetchRecommendation(vuln); }));
+        });
+    }
 }
-exports.fetchUrl = fetchUrl;
-function is404(err) {
-    var _a;
-    return axios_1.default.isAxiosError(err) && ((_a = err.response) === null || _a === void 0 ? void 0 : _a.status) === 404;
-}
-exports.is404 = is404;
-function notBlank(value) {
-    if (value === null || value === undefined)
-        return false;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const testDummy = value;
-    return true;
-}
-exports.notBlank = notBlank;
+exports.TideliftClient = TideliftClient;
 
 
 /***/ }),
 
-/***/ 4819:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ 6190:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TideliftRecommendation = void 0;
+class TideliftRecommendation {
+    constructor(vulnerability, data) {
+        this.vulnerability = vulnerability;
+        this.description = data['description'];
+        this.severity = data['severity'];
+        this.recommendation_created_at = data['recommendation_created_at'];
+        this.recommendation_updated_at = data['recommendation_updated_at'];
+        this.impact_score = data['impact_score'];
+        this.impact_description = data['impact_description'];
+        this.other_conditions = data['other_conditions'];
+        this.other_conditions_description = data['other_conditions_description'];
+        this.workaround_available = data['workaround_available'];
+        this.workaround_description = data['workaround_description'];
+        this.specific_methods_affected = data['specific_methods_affected'];
+        this.specific_methods_description = data['specific_methods_description'];
+        this.real_issue = data['real_issue'];
+        this.false_positive_reason = data['false_positive_reason'];
+    }
+}
+exports.TideliftRecommendation = TideliftRecommendation;
+
+
+/***/ }),
+
+/***/ 918:
+/***/ (function(__unused_webpack_module, exports) {
 
 "use strict";
 
@@ -386,57 +521,41 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getCveForGhsa = exports.findMentionedVulnerabilities = exports.VulnerabilityId = void 0;
-const utils_1 = __nccwpck_require__(918);
-class VulnerabilityId {
+exports.concurrently = exports.notBlank = void 0;
+function notBlank(value) {
+    if (value === null || value === undefined)
+        return false;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const testDummy = value;
+    return true;
+}
+exports.notBlank = notBlank;
+function concurrently(array, func) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const result = yield Promise.all(array.map((item) => __awaiter(this, void 0, void 0, function* () { return func.call(null, item); })));
+        return result.filter(notBlank);
+    });
+}
+exports.concurrently = concurrently;
+
+
+/***/ }),
+
+/***/ 4819:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Vulnerability = void 0;
+class Vulnerability {
     constructor(str) {
         this.equals = (other) => this.id === other.id;
         this.toString = () => this.id;
         this.id = str;
     }
 }
-exports.VulnerabilityId = VulnerabilityId;
-function findMentionedVulnerabilities(fields, octokit) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const ids = fields.flatMap(scanCve).filter(utils_1.notBlank);
-        if (octokit) {
-            const ghsa_ids = new Set(fields.flatMap(scanGhsa));
-            for (const ghsa_id of ghsa_ids) {
-                const cve = yield getCveForGhsa(ghsa_id, octokit);
-                if (cve)
-                    ids.push(cve);
-            }
-        }
-        return [...new Set(ids)].map(id => new VulnerabilityId(id));
-    });
-}
-exports.findMentionedVulnerabilities = findMentionedVulnerabilities;
-function getCveForGhsa(ghsa_id, octokit) {
-    var _a;
-    return __awaiter(this, void 0, void 0, function* () {
-        const { securityAdvisory } = yield octokit.graphql(`{
-    securityAdvisory(ghsaId: "${ghsa_id}") {
-      id
-      identifiers {
-        type
-        value
-      }
-    }
-  }`);
-        return (_a = securityAdvisory.identifiers.find(i => i['type'] === 'CVE')) === null || _a === void 0 ? void 0 : _a.value;
-    });
-}
-exports.getCveForGhsa = getCveForGhsa;
-function scanGhsa(text) {
-    const regex = /GHSA-\w{4}-\w{4}-\w{4}/gi;
-    return (String(text).match(regex) || []).filter(utils_1.notBlank);
-}
-function scanCve(text) {
-    const regex = /CVE-\d{4}-\d+/gi;
-    return (String(text).match(regex) || [])
-        .filter(utils_1.notBlank)
-        .map(str => str.toUpperCase());
-}
+exports.Vulnerability = Vulnerability;
 
 
 /***/ }),

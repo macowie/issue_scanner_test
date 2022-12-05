@@ -1,37 +1,29 @@
-import {getInput} from '@actions/core'
-import {context as githubContext} from '@actions/github'
+import {GithubClient, issueData} from './github_client'
 import {notBlank} from './utils'
 
-export type IssueNumber = number
-export type RepoOwner = string
-export type RepoName = string
-export type IssueContext = {
-  owner: RepoOwner
-  repo: RepoName
-  issue_number: IssueNumber
+export type issueNumber = number
+export type repoOwner = string
+export type repoName = string
+export type issueContext = {
+  owner: repoOwner
+  repo: repoName
+  issue_number: issueNumber
 }
 
 export class IssueNotFoundError extends Error {}
-
-export function getCurrentIssue(octokit): Issue {
-  return new Issue(getIssueContext(githubContext), octokit)
-}
-
 export class Issue {
-  owner: RepoOwner
-  repo: RepoName
-  issue_number: IssueNumber
-  octokit
-  data?
+  owner: repoOwner
+  repo: repoName
+  issue_number: issueNumber
+  data?: issueData | undefined
 
-  constructor(context: IssueContext, octokit) {
+  constructor(context: issueContext) {
     this.owner = context.owner
     this.repo = context.repo
     this.issue_number = context.issue_number
-    this.octokit = octokit
   }
 
-  get context(): IssueContext {
+  get context(): issueContext {
     return {owner: this.owner, repo: this.repo, issue_number: this.issue_number}
   }
 
@@ -41,45 +33,36 @@ export class Issue {
 
   get searchableText(): string[] {
     const searchableFields = ['title', 'body']
-    return searchableFields.map(field => this.data[field]).filter(notBlank)
+
+    return searchableFields
+      .map(field => this.data && this.data[field])
+      .filter(notBlank)
   }
 
-  async addComment(body: string): Promise<{} | undefined> {
-    return this.octokit.rest.issues.createComment({
-      ...this.context,
-      body
-    })
-  }
+  async fetchData(github: GithubClient): Promise<issueData> {
+    this.data = await github.getIssue(this.context)
 
-  async fetchComments(): Promise<{}[] | undefined> {
-    const {data} = await this.octokit.rest.issues.listComments(this.context)
-    return data
-  }
-
-  async refreshData(): Promise<{} | undefined> {
-    const {data} = await this.octokit.rest.issues.get(this.context)
-    this.data = data
     return this.data
-  }
-
-  async addLabels(labels: string[]): Promise<{} | undefined> {
-    return this.octokit.rest.issues.addLabels({...this.context, labels})
   }
 }
 
-function getIssueContext(context): IssueContext {
+export function findCurrentIssue(githubContext, issue_number): Issue {
+  return new Issue(findIssueContext(githubContext, issue_number))
+}
+
+function findIssueContext(context, issue_number): issueContext {
   const repo = context.payload?.repository?.name
   const owner = context.payload?.repository?.owner?.login
-  const issue_number = getIssueNumber(context)
+  issue_number = findIssueNumber(context, issue_number)
 
   if (repo && owner && issue_number) return {repo, owner, issue_number}
 
   throw new IssueNotFoundError()
 }
 
-function getIssueNumber(context): IssueNumber {
+function findIssueNumber(context, issue_number): issueNumber {
   const possibleNumber =
-    getInput('issue-number') ||
+    issue_number ||
     context.payload?.issue?.number ||
     context.payload?.pull_request?.number
 
