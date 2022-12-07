@@ -28,7 +28,7 @@ function createRecommendationCommentIfNeeded(issue, rec, github, template) {
                 commentIncludesText(comment, rec.vulnerability.id));
         });
         if (botComments.length === 0)
-            return github.addComment(issue, template.call(rec));
+            return github.addComment(issue, template(rec));
     });
 }
 exports.createRecommendationCommentIfNeeded = createRecommendationCommentIfNeeded;
@@ -78,8 +78,7 @@ const core_1 = __nccwpck_require__(2186);
 const dotenv = __importStar(__nccwpck_require__(2437));
 dotenv.config();
 class Configuration {
-    constructor(options) {
-        this.options = options;
+    constructor(options = {}) {
         const defaults = Configuration.defaults();
         this.issue_number = options['issue_number'] || defaults['issue_number'];
         this.github_token = options['github_token'] || defaults['github_token'];
@@ -90,11 +89,15 @@ class Configuration {
         this.templates = options['templates'] || defaults['templates'];
     }
     static defaults() {
+        const github_token = (0, core_1.getInput)('repo-token') || process.env.GITHUB_TOKEN;
+        if (!github_token) {
+            throw new Error('Could not initialize github client from env');
+        }
         return {
             issue_number: (0, core_1.getInput)('issue-number'),
             ignore_if_assigned: isTruthy((0, core_1.getInput)('ignore-if-assigned')),
             tidelift_token: (0, core_1.getInput)('tidelift-token') || process.env.TIDELIFT_TOKEN,
-            github_token: (0, core_1.getInput)('repo-token') || process.env.GITHUB_TOKEN,
+            github_token,
             templates: {
                 vuln_label: formatVulnerabilityLabel,
                 recommendation_body: formatRecommendationBody,
@@ -215,19 +218,10 @@ exports.GithubClient = GithubClient;
 /***/ }),
 
 /***/ 6018:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.findCurrentIssue = exports.Issue = exports.IssueNotFoundError = void 0;
 const utils_1 = __nccwpck_require__(918);
@@ -235,10 +229,10 @@ class IssueNotFoundError extends Error {
 }
 exports.IssueNotFoundError = IssueNotFoundError;
 class Issue {
-    constructor(context) {
-        this.owner = context.owner;
-        this.repo = context.repo;
-        this.issue_number = context.issue_number;
+    constructor({ owner, repo, issue_number }) {
+        this.owner = owner;
+        this.repo = repo;
+        this.issue_number = issue_number;
     }
     get context() {
         return { owner: this.owner, repo: this.repo, issue_number: this.issue_number };
@@ -252,12 +246,6 @@ class Issue {
         return searchableFields
             .map(field => this.data && this.data[field])
             .filter(utils_1.notBlank);
-    }
-    fetchData(github) {
-        return __awaiter(this, void 0, void 0, function* () {
-            this.data = yield github.getIssue(this.context);
-            return this.data;
-        });
     }
 }
 exports.Issue = Issue;
@@ -356,42 +344,57 @@ const tidelift_client_1 = __nccwpck_require__(9061);
 const github_client_1 = __nccwpck_require__(6125);
 const core_1 = __nccwpck_require__(2186);
 class Scanner {
-    constructor(options) {
-        this.config = new configuration_1.Configuration(options);
-        this.github = new github_client_1.GithubClient(this.config.github_token);
+    constructor({ config, github, tidelift } = {}) {
+        this.config = config || new configuration_1.Configuration();
+        this.github = github || new github_client_1.GithubClient(this.config.github_token);
+        this.tidelift = tidelift;
+        if (this.config.tidelift_token) {
+            this.tidelift || (this.tidelift = new tidelift_client_1.TideliftClient(this.config.tidelift_token));
+        }
     }
     perform(issue) {
         return __awaiter(this, void 0, void 0, function* () {
-            yield issue.fetchData(this.github);
+            try {
+                issue.data = yield this.github.getIssue(issue.context);
+            }
+            catch (_a) {
+                return Scanner.statuses.no_issue_data(issue.context);
+            }
             if (this.config.ignore_if_assigned && issue.hasAssignees) {
-                return 'No action being taken. Ignoring because one or more assignees have been added to the issue';
+                return Scanner.statuses.ignored_assigned();
             }
-            const mentionedVulns = yield findMentionedVulnerabilities(issue.searchableText, this.github);
-            if (mentionedVulns.length === 0) {
-                return 'Did not find any vulnerabilities mentioned';
+            const vulnerabilities = yield findMentionedVulnerabilities(issue.searchableText, this.github);
+            const recommendations = [];
+            if (vulnerabilities.length === 0) {
+                return Scanner.statuses.no_vulnerabilities();
             }
-            const labelsToAdd = mentionedVulns.map(vuln => this.config.templates.vuln_label(vuln.id));
-            let msg = `Found mentions of: ${mentionedVulns}`;
+            const labelsToAdd = vulnerabilities.map(vuln => this.config.templates.vuln_label(vuln.id));
             if (!this.config.tidelift_token) {
                 (0, core_1.info)('No Tidelift token provided, skipping recommendation scan.');
             }
             else {
                 this.tidelift = new tidelift_client_1.TideliftClient(this.config.tidelift_token);
-                const recommendations = yield this.tidelift.fetchRecommendations(mentionedVulns);
+                recommendations.concat(yield this.tidelift.fetchRecommendations(vulnerabilities));
                 if (recommendations.length > 0) {
                     labelsToAdd.push(this.config.templates.has_recommendation_label());
                 }
                 for (const rec of recommendations) {
                     yield (0, comment_1.createRecommendationCommentIfNeeded)(issue, rec, this.github, this.config.templates.recommendation_body);
                 }
-                msg += `\nWith recommendations on: ${recommendations.map(r => r.vulnerability)}`;
             }
             yield this.github.addLabels(issue, labelsToAdd);
-            return msg;
+            return Scanner.statuses.success(vulnerabilities, recommendations);
         });
     }
 }
 exports.Scanner = Scanner;
+Scanner.statuses = {
+    no_issue_data: context => `Could not get issue data for ${context}`,
+    ignored_assigned: () => `No action being taken. Ignoring because one or more assignees have been added to the issue`,
+    no_vulnerabilities: () => 'Did not find any vulnerabilities mentioned',
+    success: (vulns, recs) => `Detected mentions of: ${vulns}
+       With recommendations on: ${recs.map(r => r.vulnerability)}`
+};
 function findMentionedVulnerabilities(fields, github) {
     return __awaiter(this, void 0, void 0, function* () {
         const cve_ids = new Set(fields.flatMap(scanCve));
@@ -550,7 +553,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Vulnerability = void 0;
 class Vulnerability {
     constructor(str) {
-        this.equals = (other) => this.id === other.id;
+        this.equals = ({ id }) => this.id === id;
         this.toString = () => this.id;
         this.id = str;
     }
