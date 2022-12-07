@@ -84,13 +84,15 @@ export class GithubClient {
   }
 
   async addLabels(
-    context: issueContext,
+    {repo, owner, issue_number}: issueContext,
     labels: string[]
   ): Promise<
     RestEndpointMethodTypes['issues']['addLabels']['response']['data']
   > {
     const {data} = await this.octokit.rest.issues.addLabels({
-      ...context,
+      repo,
+      owner,
+      issue_number,
       labels
     })
 

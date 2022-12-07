@@ -35,7 +35,7 @@ export class Scanner {
 
   async perform(issue: Issue): Promise<string> {
     try {
-      issue.data = await this.github.getIssue(issue.context)
+      issue.data = await this.github.getIssue(issue)
     } catch {
       return Scanner.statuses.no_issue_data(issue.context)
     }
