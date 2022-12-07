@@ -1,32 +1,23 @@
 import {getInput} from '@actions/core'
 import {TideliftRecommendation} from './tidelift_recommendation'
 import * as dotenv from 'dotenv'
+import {possibleIssueNumber} from './issue'
 dotenv.config()
 
-type ConfigurationOptions = {
-  issue_number: string | undefined
-  tidelift_token: string | undefined
-  github_token: string | undefined
-  ignore_if_assigned: boolean
-  templates: {
-    vuln_label: (vuln_id: string) => string
-    recommendation_body: (rec: TideliftRecommendation) => string
-    has_recommendation_label: () => string
-  }
+type TemplateSet = {
+  vuln_label: (vuln_id: string) => string
+  recommendation_body: (rec: TideliftRecommendation) => string
+  has_recommendation_label: () => string
 }
 
-export class Configuration implements ConfigurationOptions {
-  issue_number: string
-  tidelift_token: string | undefined
-  github_token: string | undefined
+export class Configuration {
+  issue_number: possibleIssueNumber
+  tidelift_token?: string
+  github_token: string
   ignore_if_assigned: boolean
-  templates: {
-    vuln_label: (vuln_id: string) => string
-    recommendation_body: (rec: TideliftRecommendation) => string
-    has_recommendation_label: () => string
-  }
+  templates: TemplateSet
 
-  constructor(public options) {
+  constructor(options: Partial<Configuration> = {}) {
     const defaults = Configuration.defaults()
 
     this.issue_number = options['issue_number'] || defaults['issue_number']
@@ -38,12 +29,17 @@ export class Configuration implements ConfigurationOptions {
     this.templates = options['templates'] || defaults['templates']
   }
 
-  static defaults(): ConfigurationOptions {
+  static defaults(): Configuration {
+    const github_token = getInput('repo-token') || process.env.GITHUB_TOKEN
+    if (!github_token) {
+      throw new Error('Could not initialize github client from env')
+    }
+
     return {
       issue_number: getInput('issue-number'),
       ignore_if_assigned: isTruthy(getInput('ignore-if-assigned')),
       tidelift_token: getInput('tidelift-token') || process.env.TIDELIFT_TOKEN,
-      github_token: getInput('repo-token') || process.env.GITHUB_TOKEN,
+      github_token,
       templates: {
         vuln_label: formatVulnerabilityLabel,
         recommendation_body: formatRecommendationBody,

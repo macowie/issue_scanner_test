@@ -6,46 +6,65 @@ import {createRecommendationCommentIfNeeded} from './comment'
 import {TideliftClient} from './tidelift_client'
 import {GithubClient} from './github_client'
 import {info} from '@actions/core'
+import {TideliftRecommendation} from './tidelift_recommendation'
 
 export class Scanner {
   config: Configuration
   github: GithubClient
   tidelift?: TideliftClient
 
-  constructor(options: Configuration | void) {
-    this.config = new Configuration(options)
-    this.github = new GithubClient(this.config.github_token)
+  constructor({config, github, tidelift}: Partial<Scanner> = {}) {
+    this.config = config || new Configuration()
+    this.github = github || new GithubClient(this.config.github_token)
+
+    this.tidelift = tidelift
+    if (this.config.tidelift_token) {
+      this.tidelift ||= new TideliftClient(this.config.tidelift_token)
+    }
+  }
+
+  static statuses = {
+    no_issue_data: context => `Could not get issue data for ${context}`,
+    ignored_assigned: () =>
+      `No action being taken. Ignoring because one or more assignees have been added to the issue`,
+    no_vulnerabilities: () => 'Did not find any vulnerabilities mentioned',
+    success: (vulns, recs) =>
+      `Detected mentions of: ${vulns}
+       With recommendations on: ${recs.map(r => r.vulnerability)}`
   }
 
   async perform(issue: Issue): Promise<string> {
-    await issue.fetchData(this.github)
-
-    if (this.config.ignore_if_assigned && issue.hasAssignees) {
-      return 'No action being taken. Ignoring because one or more assignees have been added to the issue'
+    try {
+      issue.data = await this.github.getIssue(issue.context)
+    } catch {
+      return Scanner.statuses.no_issue_data(issue.context)
     }
 
-    const mentionedVulns = await findMentionedVulnerabilities(
+    if (this.config.ignore_if_assigned && issue.hasAssignees) {
+      return Scanner.statuses.ignored_assigned()
+    }
+
+    const vulnerabilities = await findMentionedVulnerabilities(
       issue.searchableText,
       this.github
     )
+    const recommendations: TideliftRecommendation[] = []
 
-    if (mentionedVulns.length === 0) {
-      return 'Did not find any vulnerabilities mentioned'
+    if (vulnerabilities.length === 0) {
+      return Scanner.statuses.no_vulnerabilities()
     }
 
-    const labelsToAdd = mentionedVulns.map(vuln =>
+    const labelsToAdd = vulnerabilities.map(vuln =>
       this.config.templates.vuln_label(vuln.id)
     )
-
-    let msg = `Found mentions of: ${mentionedVulns}`
 
     if (!this.config.tidelift_token) {
       info('No Tidelift token provided, skipping recommendation scan.')
     } else {
       this.tidelift = new TideliftClient(this.config.tidelift_token)
 
-      const recommendations = await this.tidelift.fetchRecommendations(
-        mentionedVulns
+      recommendations.concat(
+        await this.tidelift.fetchRecommendations(vulnerabilities)
       )
 
       if (recommendations.length > 0) {
@@ -60,15 +79,11 @@ export class Scanner {
           this.config.templates.recommendation_body
         )
       }
-
-      msg += `\nWith recommendations on: ${recommendations.map(
-        r => r.vulnerability
-      )}`
     }
 
     await this.github.addLabels(issue, labelsToAdd)
 
-    return msg
+    return Scanner.statuses.success(vulnerabilities, recommendations)
   }
 }
 

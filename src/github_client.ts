@@ -15,7 +15,7 @@ export type commentsData =
 export class GithubClient {
   octokit: InstanceType<typeof GitHub>
 
-  constructor(token) {
+  constructor(token: string) {
     this.octokit = getOctokit(token)
   }
 

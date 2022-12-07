@@ -1,26 +1,26 @@
-import {GithubClient, issueData} from './github_client'
+import {issueData} from './github_client'
 import {notBlank} from './utils'
 
 export type issueNumber = number
-export type repoOwner = string
-export type repoName = string
+export type possibleIssueNumber = number | string | void
 export type issueContext = {
-  owner: repoOwner
-  repo: repoName
+  owner: string
+  repo: string
   issue_number: issueNumber
 }
 
 export class IssueNotFoundError extends Error {}
-export class Issue {
-  owner: repoOwner
-  repo: repoName
-  issue_number: issueNumber
-  data?: issueData | undefined
 
-  constructor(context: issueContext) {
-    this.owner = context.owner
-    this.repo = context.repo
-    this.issue_number = context.issue_number
+export class Issue implements issueContext {
+  owner: string
+  repo: string
+  issue_number: issueNumber
+  data?: issueData
+
+  constructor({owner, repo, issue_number}: issueContext) {
+    this.owner = owner
+    this.repo = repo
+    this.issue_number = issue_number
   }
 
   get context(): issueContext {
@@ -38,19 +38,19 @@ export class Issue {
       .map(field => this.data && this.data[field])
       .filter(notBlank)
   }
-
-  async fetchData(github: GithubClient): Promise<issueData> {
-    this.data = await github.getIssue(this.context)
-
-    return this.data
-  }
 }
 
-export function findCurrentIssue(githubContext, issue_number): Issue {
+export function findCurrentIssue(
+  githubContext,
+  issue_number: possibleIssueNumber
+): Issue {
   return new Issue(findIssueContext(githubContext, issue_number))
 }
 
-function findIssueContext(context, issue_number): issueContext {
+function findIssueContext(
+  context,
+  issue_number: possibleIssueNumber
+): issueContext {
   const repo = context.payload?.repository?.name
   const owner = context.payload?.repository?.owner?.login
   issue_number = findIssueNumber(context, issue_number)
@@ -60,7 +60,10 @@ function findIssueContext(context, issue_number): issueContext {
   throw new IssueNotFoundError()
 }
 
-function findIssueNumber(context, issue_number): issueNumber {
+function findIssueNumber(
+  context,
+  issue_number: possibleIssueNumber
+): issueNumber {
   const possibleNumber =
     issue_number ||
     context.payload?.issue?.number ||

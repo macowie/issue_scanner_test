@@ -6,7 +6,7 @@ export async function createRecommendationCommentIfNeeded(
   issue: Issue,
   rec: TideliftRecommendation,
   github: GithubClient,
-  template: Function
+  template: (r: TideliftRecommendation) => string
 ): Promise<{} | undefined> {
   const comments = await github.listComments(issue)
 
@@ -21,8 +21,7 @@ export async function createRecommendationCommentIfNeeded(
     )
   })
 
-  if (botComments.length === 0)
-    return github.addComment(issue, template.call(rec))
+  if (botComments.length === 0) return github.addComment(issue, template(rec))
 }
 
 function isBotReportComment(comment: commentData): boolean {
