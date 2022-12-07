@@ -45,20 +45,30 @@ export class GithubClient {
     return data
   }
 
-  async listComments(context: issueContext): Promise<commentsData> {
-    const {data} = await this.octokit.rest.issues.listComments(context)
+  async listComments({
+    repo,
+    owner,
+    issue_number
+  }: issueContext): Promise<commentsData> {
+    const {data} = await this.octokit.rest.issues.listComments({
+      repo,
+      owner,
+      issue_number
+    })
 
     return data
   }
 
   async addComment(
-    context: issueContext,
+    {repo, owner, issue_number}: issueContext,
     body: string
   ): Promise<
     RestEndpointMethodTypes['issues']['createComment']['response']['data']
   > {
     const {data} = await this.octokit.rest.issues.createComment({
-      ...context,
+      repo,
+      owner,
+      issue_number,
       body
     })
 

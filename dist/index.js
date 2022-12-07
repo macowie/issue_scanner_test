@@ -193,15 +193,24 @@ class GithubClient {
             return data;
         });
     }
-    listComments(context) {
+    listComments({ repo, owner, issue_number }) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { data } = yield this.octokit.rest.issues.listComments(context);
+            const { data } = yield this.octokit.rest.issues.listComments({
+                repo,
+                owner,
+                issue_number
+            });
             return data;
         });
     }
-    addComment(context, body) {
+    addComment({ repo, owner, issue_number }, body) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { data } = yield this.octokit.rest.issues.createComment(Object.assign(Object.assign({}, context), { body }));
+            const { data } = yield this.octokit.rest.issues.createComment({
+                repo,
+                owner,
+                issue_number,
+                body
+            });
             return data;
         });
     }
