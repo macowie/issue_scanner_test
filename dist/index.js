@@ -187,9 +187,13 @@ class GithubClient {
             return (_a = securityAdvisory.identifiers.find(i => i['type'] === 'CVE')) === null || _a === void 0 ? void 0 : _a.value;
         });
     }
-    getIssue(context) {
+    getIssue({ repo, owner, issue_number }) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { data } = yield this.octokit.rest.issues.get(context);
+            const { data } = yield this.octokit.rest.issues.get({
+                repo,
+                owner,
+                issue_number
+            });
             return data;
         });
     }

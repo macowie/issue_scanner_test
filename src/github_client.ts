@@ -39,8 +39,16 @@ export class GithubClient {
     return securityAdvisory.identifiers.find(i => i['type'] === 'CVE')?.value
   }
 
-  async getIssue(context: issueContext): Promise<issueData> {
-    const {data} = await this.octokit.rest.issues.get(context)
+  async getIssue({
+    repo,
+    owner,
+    issue_number
+  }: issueContext): Promise<issueData> {
+    const {data} = await this.octokit.rest.issues.get({
+      repo,
+      owner,
+      issue_number
+    })
 
     return data
   }
