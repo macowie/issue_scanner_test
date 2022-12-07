@@ -218,9 +218,14 @@ class GithubClient {
             return data;
         });
     }
-    addLabels(context, labels) {
+    addLabels({ repo, owner, issue_number }, labels) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { data } = yield this.octokit.rest.issues.addLabels(Object.assign(Object.assign({}, context), { labels }));
+            const { data } = yield this.octokit.rest.issues.addLabels({
+                repo,
+                owner,
+                issue_number,
+                labels
+            });
             return data;
         });
     }
@@ -368,7 +373,7 @@ class Scanner {
     perform(issue) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                issue.data = yield this.github.getIssue(issue.context);
+                issue.data = yield this.github.getIssue(issue);
             }
             catch (_a) {
                 return Scanner.statuses.no_issue_data(issue.context);
@@ -413,7 +418,14 @@ function findMentionedVulnerabilities(fields, github) {
         const cve_ids = new Set(fields.flatMap(scanCve));
         const ghsa_ids = new Set(fields.flatMap(scanGhsa));
         if (github && ghsa_ids.size > 0) {
-            const translated_ids = yield (0, utils_1.concurrently)([...ghsa_ids], (ghsa_id) => __awaiter(this, void 0, void 0, function* () { return github.getCveForGhsa(ghsa_id); }));
+            const translated_ids = yield (0, utils_1.concurrently)([...ghsa_ids], (ghsa_id) => __awaiter(this, void 0, void 0, function* () {
+                try {
+                    return github.getCveForGhsa(ghsa_id);
+                }
+                catch (_a) {
+                    return;
+                }
+            }));
             for (const cve_id of translated_ids) {
                 cve_ids.add(cve_id);
             }
