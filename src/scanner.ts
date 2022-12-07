@@ -97,7 +97,13 @@ export async function findMentionedVulnerabilities(
   if (github && ghsa_ids.size > 0) {
     const translated_ids = await concurrently<string, string>(
       [...ghsa_ids],
-      async ghsa_id => github.getCveForGhsa(ghsa_id)
+      async ghsa_id => {
+        try {
+          return github.getCveForGhsa(ghsa_id)
+        } catch {
+          return
+        }
+      }
     )
 
     for (const cve_id of translated_ids) {
