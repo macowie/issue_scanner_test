@@ -17,10 +17,16 @@ export class Issue implements issueContext {
   issue_number: issueNumber
   data?: issueData
 
-  constructor({owner, repo, issue_number}: issueContext) {
+  constructor({
+    owner,
+    repo,
+    issue_number,
+    data
+  }: issueContext & {data?: issueData}) {
     this.owner = owner
     this.repo = repo
     this.issue_number = issue_number
+    this.data = data
   }
 
   get context(): issueContext {

@@ -2,12 +2,18 @@ import {getInput} from '@actions/core'
 import {TideliftRecommendation} from './tidelift_recommendation'
 import * as dotenv from 'dotenv'
 import {possibleIssueNumber} from './issue'
+import {VulnerabilityId} from './scanner'
 dotenv.config()
 
 type TemplateSet = {
   vuln_label: (vuln_id: string) => string
-  recommendation_body: (rec: TideliftRecommendation) => string
+  recommendation_comment: (rec: TideliftRecommendation) => string
   has_recommendation_label: () => string
+  possible_duplicate_label: () => string
+  possible_duplicate_comment: (
+    vuln: VulnerabilityId,
+    issue_number: string | number
+  ) => string
 }
 
 export class Configuration {
@@ -42,8 +48,10 @@ export class Configuration {
       github_token,
       templates: {
         vuln_label: formatVulnerabilityLabel,
-        recommendation_body: formatRecommendationBody,
-        has_recommendation_label: formatHasRecommenationLabel
+        recommendation_comment: formatRecommendationComment,
+        has_recommendation_label: formatHasRecommenationLabel,
+        possible_duplicate_label: formatPossibleDuplicateLabel,
+        possible_duplicate_comment: formatPossibleDuplicateComment
       }
     }
   }
@@ -57,7 +65,7 @@ function formatHasRecommenationLabel(): string {
   return `:green_circle: has-recommendation`
 }
 
-function formatRecommendationBody(
+function formatRecommendationComment(
   recommendation: TideliftRecommendation
 ): string {
   return `:wave: It looks like you are talking about ${recommendation.vulnerability}. I have more information to help you handle this CVE.
@@ -70,6 +78,17 @@ ${recommendation.impact_description}
 
 Is there a workaround available? ${recommendation.workaround_available}
 ${recommendation.workaround_description}`
+}
+
+function formatPossibleDuplicateLabel(): string {
+  return `:large_blue_circle: possible-duplicate`
+}
+
+function formatPossibleDuplicateComment(
+  vuln: string,
+  issue_number: string | number
+): string {
+  return `An issue referencing ${vuln} was first filed in #${issue_number}. If your issue is different from this, please let us know.`
 }
 
 function isTruthy(val): boolean {

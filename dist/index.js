@@ -16,29 +16,42 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.createRecommendationCommentIfNeeded = void 0;
-function createRecommendationCommentIfNeeded(issue, rec, github, template) {
+exports.createDuplicatesCommentIfNeeded = exports.createRecommendationsCommentIfNeeded = void 0;
+function createRecommendationsCommentIfNeeded(issue, recs, github, template) {
     return __awaiter(this, void 0, void 0, function* () {
         const comments = yield github.listComments(issue);
-        if (!comments) {
+        if (!comments)
             return;
-        }
-        const botComments = comments.filter(comment => {
-            return (isBotReportComment(comment) &&
-                commentIncludesText(comment, rec.vulnerability.id));
-        });
-        if (botComments.length === 0)
-            return github.addComment(issue, template(rec));
+        const botComments = comments.filter(isBotComment);
+        const unmentioned_recs = [...recs].filter(rec => !botComments.some(commentIncludesText, rec.vulnerability));
+        if (unmentioned_recs.length > 0)
+            return github.addComment(issue, unmentioned_recs.map(rec => template(rec)).join('\n---\n'));
     });
 }
-exports.createRecommendationCommentIfNeeded = createRecommendationCommentIfNeeded;
-function isBotReportComment(comment) {
-    var _a;
-    return ((_a = comment.user) === null || _a === void 0 ? void 0 : _a.login) === 'github-actions[bot]';
+exports.createRecommendationsCommentIfNeeded = createRecommendationsCommentIfNeeded;
+function createDuplicatesCommentIfNeeded(issue, duplicates, github, template) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const comments = yield github.listComments(issue);
+        if (!comments)
+            return;
+        const botComments = comments.filter(isBotComment);
+        const unmentioned_dupes = [...duplicates].filter(([vuln]) => !botComments.some(commentIncludesText, vuln));
+        if (unmentioned_dupes.length > 0)
+            return github.addComment(issue, unmentioned_dupes
+                .map(([vuln, prior_issue]) => template(vuln, prior_issue))
+                .join('\n---\n'));
+    });
 }
-function commentIncludesText(comment, query) {
+exports.createDuplicatesCommentIfNeeded = createDuplicatesCommentIfNeeded;
+function isBotComment(comment) {
+    var _a, _b;
+    return (((_a = comment === null || comment === void 0 ? void 0 : comment.user) === null || _a === void 0 ? void 0 : _a.login) === 'github-actions[bot]' &&
+        ((_b = comment === null || comment === void 0 ? void 0 : comment.user) === null || _b === void 0 ? void 0 : _b.type) === 'Bot');
+}
+function commentIncludesText(comment) {
     var _a;
-    return !!((_a = comment.body) === null || _a === void 0 ? void 0 : _a.includes(query));
+    // eslint-disable-next-line no-invalid-this
+    return !!((_a = comment.body) === null || _a === void 0 ? void 0 : _a.includes(this));
 }
 
 
@@ -100,8 +113,10 @@ class Configuration {
             github_token,
             templates: {
                 vuln_label: formatVulnerabilityLabel,
-                recommendation_body: formatRecommendationBody,
-                has_recommendation_label: formatHasRecommenationLabel
+                recommendation_comment: formatRecommendationComment,
+                has_recommendation_label: formatHasRecommenationLabel,
+                possible_duplicate_label: formatPossibleDuplicateLabel,
+                possible_duplicate_comment: formatPossibleDuplicateComment
             }
         };
     }
@@ -113,7 +128,7 @@ function formatVulnerabilityLabel(vuln_id) {
 function formatHasRecommenationLabel() {
     return `:green_circle: has-recommendation`;
 }
-function formatRecommendationBody(recommendation) {
+function formatRecommendationComment(recommendation) {
     return `:wave: It looks like you are talking about ${recommendation.vulnerability}. I have more information to help you handle this CVE.
 
 Is this a legit issue with this project? ${recommendation.real_issue}
@@ -124,6 +139,12 @@ ${recommendation.impact_description}
 
 Is there a workaround available? ${recommendation.workaround_available}
 ${recommendation.workaround_description}`;
+}
+function formatPossibleDuplicateLabel() {
+    return `:large_blue_circle: possible-duplicate`;
+}
+function formatPossibleDuplicateComment(vuln, issue_number) {
+    return `An issue referencing ${vuln} was first filed in #${issue_number}. If your issue is different from this, please let us know.`;
 }
 function isTruthy(val) {
     return ['true', 't', 'yes'].includes(String(val).toLowerCase());
@@ -197,6 +218,16 @@ class GithubClient {
             return data;
         });
     }
+    listIssues({ repo, owner }) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { data } = yield this.octokit.rest.issues.listForRepo({
+                repo,
+                owner,
+                state: 'all'
+            });
+            return data;
+        });
+    }
     listComments({ repo, owner, issue_number }) {
         return __awaiter(this, void 0, void 0, function* () {
             const { data } = yield this.octokit.rest.issues.listComments({
@@ -247,10 +278,11 @@ class IssueNotFoundError extends Error {
 }
 exports.IssueNotFoundError = IssueNotFoundError;
 class Issue {
-    constructor({ owner, repo, issue_number }) {
+    constructor({ owner, repo, issue_number, data }) {
         this.owner = owner;
         this.repo = repo;
         this.issue_number = issue_number;
+        this.data = data;
     }
     get context() {
         return { owner: this.owner, repo: this.repo, issue_number: this.issue_number };
@@ -352,56 +384,137 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __asyncValues = (this && this.__asyncValues) || function (o) {
+    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+    var m = o[Symbol.asyncIterator], i;
+    return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+    function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+    function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.scanCve = exports.scanGhsa = exports.findMentionedVulnerabilities = exports.Scanner = void 0;
+exports.scanCve = exports.scanGhsa = exports.Scanner = void 0;
 const utils_1 = __nccwpck_require__(918);
 const configuration_1 = __nccwpck_require__(5527);
-const vulnerability_1 = __nccwpck_require__(4819);
 const comment_1 = __nccwpck_require__(1667);
 const tidelift_client_1 = __nccwpck_require__(9061);
 const github_client_1 = __nccwpck_require__(6125);
 const core_1 = __nccwpck_require__(2186);
 class Scanner {
-    constructor({ config, github, tidelift } = {}) {
-        this.config = config || new configuration_1.Configuration();
-        this.github = github || new github_client_1.GithubClient(this.config.github_token);
-        this.tidelift = tidelift;
+    constructor(options = {}) {
+        this.config = options['config'] || new configuration_1.Configuration();
+        this.github =
+            options['github'] || new github_client_1.GithubClient(this.config.github_token);
+        this.tidelift = options['tidelift'];
         if (this.config.tidelift_token) {
             this.tidelift || (this.tidelift = new tidelift_client_1.TideliftClient(this.config.tidelift_token));
         }
     }
     perform(issue) {
+        var _a;
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 issue.data = yield this.github.getIssue(issue);
             }
-            catch (_a) {
+            catch (_b) {
                 return Scanner.statuses.no_issue_data(issue.context);
             }
             if (this.config.ignore_if_assigned && issue.hasAssignees) {
                 return Scanner.statuses.ignored_assigned();
             }
-            const vulnerabilities = yield findMentionedVulnerabilities(issue.searchableText, this.github);
-            const recommendations = [];
-            if (vulnerabilities.length === 0) {
+            const vulnerabilities = yield this.find_all(issue.searchableText);
+            const recommendations = yield this.find_recommendations(vulnerabilities);
+            const duplicates = yield this.check_duplicates(issue, vulnerabilities);
+            if (vulnerabilities.size === 0) {
                 return Scanner.statuses.no_vulnerabilities();
             }
-            const labelsToAdd = vulnerabilities.map(vuln => this.config.templates.vuln_label(vuln.id));
-            if (!this.config.tidelift_token) {
-                (0, core_1.info)('No Tidelift token provided, skipping recommendation scan.');
+            const labelsToAdd = [...vulnerabilities.values()].map(vuln => this.config.templates.vuln_label(vuln));
+            if (recommendations.length > 0) {
+                labelsToAdd.push(this.config.templates.has_recommendation_label());
+                (0, comment_1.createRecommendationsCommentIfNeeded)(issue, recommendations, this.github, this.config.templates.recommendation_comment);
             }
-            else {
-                this.tidelift = new tidelift_client_1.TideliftClient(this.config.tidelift_token);
-                recommendations.concat(yield this.tidelift.fetchRecommendations(vulnerabilities));
-                if (recommendations.length > 0) {
-                    labelsToAdd.push(this.config.templates.has_recommendation_label());
-                }
-                for (const rec of recommendations) {
-                    yield (0, comment_1.createRecommendationCommentIfNeeded)(issue, rec, this.github, this.config.templates.recommendation_body);
-                }
+            if (duplicates.size > 0) {
+                labelsToAdd.push(this.config.templates.possible_duplicate_label());
+                (0, comment_1.createDuplicatesCommentIfNeeded)(issue, duplicates, this.github, this.config.templates.possible_duplicate_comment);
             }
-            yield this.github.addLabels(issue, labelsToAdd);
+            yield ((_a = this.github) === null || _a === void 0 ? void 0 : _a.addLabels(issue, labelsToAdd));
             return Scanner.statuses.success(vulnerabilities, recommendations);
+        });
+    }
+    find_all(fields) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return new Set([
+                ...this.find_cves(fields),
+                ...(yield this.find_ghsas(fields))
+            ]);
+        });
+    }
+    find_cves(fields) {
+        return new Set(fields.flatMap(scanCve));
+    }
+    find_ghsas(fields) {
+        var _a, e_1, _b, _c;
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this.github) {
+                (0, core_1.info)('No github client for lookup');
+                return new Set();
+            }
+            const vulnerabilities = new Set();
+            try {
+                for (var _d = true, _e = __asyncValues(fields.flatMap(scanGhsa).filter(utils_1.unique)), _f; _f = yield _e.next(), _a = _f.done, !_a;) {
+                    _c = _f.value;
+                    _d = false;
+                    try {
+                        const ghsa_id = _c;
+                        const possible_cve = yield this.github.getCveForGhsa(ghsa_id);
+                        if (possible_cve) {
+                            vulnerabilities.add(possible_cve);
+                        }
+                    }
+                    finally {
+                        _d = true;
+                    }
+                }
+            }
+            catch (e_1_1) { e_1 = { error: e_1_1 }; }
+            finally {
+                try {
+                    if (!_d && !_a && (_b = _e.return)) yield _b.call(_e);
+                }
+                finally { if (e_1) throw e_1.error; }
+            }
+            return vulnerabilities;
+        });
+    }
+    find_recommendations(vulnerabilities) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this.tidelift) {
+                (0, core_1.info)('No Tidelift client for lookup');
+                return [];
+            }
+            return yield this.tidelift.fetchRecommendations([
+                ...vulnerabilities.values()
+            ]);
+        });
+    }
+    check_duplicates({ repo, owner }, vulnerabilities) {
+        var _a, _b;
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this.github) {
+                (0, core_1.info)('No github client for lookup');
+                return new Map();
+            }
+            const issuesData = yield ((_a = this.github) === null || _a === void 0 ? void 0 : _a.listIssues({ repo, owner }));
+            if (!issuesData) {
+                (0, core_1.info)('Could not check other issues on repository');
+                return new Map();
+            }
+            const mentions = new Map();
+            for (const vuln of vulnerabilities) {
+                const issue_number = (_b = issuesData.find(({ title, body }) => this.find_cves([title, String(body)]).has(vuln))) === null || _b === void 0 ? void 0 : _b.id;
+                if (issue_number)
+                    mentions.set(vuln, issue_number);
+            }
+            return mentions;
         });
     }
 }
@@ -410,30 +523,9 @@ Scanner.statuses = {
     no_issue_data: context => `Could not get issue data for ${context}`,
     ignored_assigned: () => `No action being taken. Ignoring because one or more assignees have been added to the issue`,
     no_vulnerabilities: () => 'Did not find any vulnerabilities mentioned',
-    success: (vulns, recs) => `Detected mentions of: ${vulns}
+    success: (vulns, recs) => `Detected mentions of: ${[...vulns]}
        With recommendations on: ${recs.map(r => r.vulnerability)}`
 };
-function findMentionedVulnerabilities(fields, github) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const cve_ids = new Set(fields.flatMap(scanCve));
-        const ghsa_ids = new Set(fields.flatMap(scanGhsa));
-        if (github && ghsa_ids.size > 0) {
-            const translated_ids = yield (0, utils_1.concurrently)([...ghsa_ids], (ghsa_id) => __awaiter(this, void 0, void 0, function* () {
-                try {
-                    return github.getCveForGhsa(ghsa_id);
-                }
-                catch (_a) {
-                    return;
-                }
-            }));
-            for (const cve_id of translated_ids) {
-                cve_ids.add(cve_id);
-            }
-        }
-        return [...cve_ids].map(id => new vulnerability_1.Vulnerability(id));
-    });
-}
-exports.findMentionedVulnerabilities = findMentionedVulnerabilities;
 function scanGhsa(text) {
     const regex = /GHSA-\w{4}-\w{4}-\w{4}/gi;
     return (String(text).match(regex) || []).filter(utils_1.notBlank);
@@ -485,7 +577,7 @@ class TideliftClient {
     }
     fetchRecommendation(vuln) {
         return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this.client.get(`/vulnerability/${vuln.id}/recommendation`);
+            const response = yield this.client.get(`/vulnerability/${vuln}/recommendation`);
             if (response.status === 404) {
                 return;
             }
@@ -549,7 +641,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.concurrently = exports.notBlank = void 0;
+exports.concurrently = exports.unique = exports.notBlank = void 0;
 function notBlank(value) {
     if (value === null || value === undefined)
         return false;
@@ -558,6 +650,10 @@ function notBlank(value) {
     return true;
 }
 exports.notBlank = notBlank;
+function unique(value, index, self) {
+    return self.indexOf(value) === index;
+}
+exports.unique = unique;
 function concurrently(array, func) {
     return __awaiter(this, void 0, void 0, function* () {
         const result = yield Promise.all(array.map((item) => __awaiter(this, void 0, void 0, function* () { return func.call(null, item); })));
@@ -565,25 +661,6 @@ function concurrently(array, func) {
     });
 }
 exports.concurrently = concurrently;
-
-
-/***/ }),
-
-/***/ 4819:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Vulnerability = void 0;
-class Vulnerability {
-    constructor(str) {
-        this.equals = ({ id }) => this.id === id;
-        this.toString = () => this.id;
-        this.id = str;
-    }
-}
-exports.Vulnerability = Vulnerability;
 
 
 /***/ }),

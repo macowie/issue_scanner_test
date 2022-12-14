@@ -53,6 +53,22 @@ export class GithubClient {
     return data
   }
 
+  async listIssues({
+    repo,
+    owner
+  }: {
+    repo: string
+    owner: string
+  }): Promise<issueData[]> {
+    const {data} = await this.octokit.rest.issues.listForRepo({
+      repo,
+      owner,
+      state: 'all'
+    })
+
+    return data
+  }
+
   async listComments({
     repo,
     owner,

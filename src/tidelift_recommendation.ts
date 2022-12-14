@@ -1,4 +1,4 @@
-import {Vulnerability} from './vulnerability'
+import {VulnerabilityId} from './scanner'
 
 type RecommendationData = {
   description: string
@@ -18,7 +18,7 @@ type RecommendationData = {
 }
 
 export class TideliftRecommendation implements RecommendationData {
-  vulnerability: Vulnerability
+  vulnerability: VulnerabilityId
   description: string
   severity: number
   recommendation_created_at: Date
@@ -34,7 +34,7 @@ export class TideliftRecommendation implements RecommendationData {
   real_issue: boolean
   false_positive_reason?: string
 
-  constructor(vulnerability: Vulnerability, data: RecommendationData) {
+  constructor(vulnerability: VulnerabilityId, data: RecommendationData) {
     this.vulnerability = vulnerability
     this.description = data['description']
     this.severity = data['severity']

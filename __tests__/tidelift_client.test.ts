@@ -1,14 +1,13 @@
 import {expect, describe, test} from '@jest/globals'
 import {Configuration} from '../src/configuration'
 import {TideliftClient} from '../src/tidelift_client'
-import {Vulnerability} from '../src/vulnerability'
 import {TideliftRecommendation} from '../src/tidelift_recommendation'
 
 const tidelift = new TideliftClient(
   Configuration.defaults().tidelift_token || 'NO_TOKEN'
 )
-const fakeVuln = new Vulnerability('CVE-5555-1234')
-const realVuln = new Vulnerability('cve-2021-3807')
+const fakeVuln = 'CVE-5555-1234'
+const realVuln = 'cve-2021-3807'
 
 describe('fetchRecommendation', () => {
   test('when not found, returns nothing', async () => {

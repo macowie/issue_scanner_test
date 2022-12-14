@@ -7,6 +7,14 @@ export function notBlank<TValue>(
   return true
 }
 
+export function unique<TValue>(
+  value: TValue,
+  index: number,
+  self: TValue[]
+): boolean {
+  return self.indexOf(value) === index
+}
+
 export async function concurrently<A, B>(
   array: A[],
   func: (item: A) => B | undefined | Promise<B | undefined>

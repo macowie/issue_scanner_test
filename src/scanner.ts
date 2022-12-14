@@ -1,23 +1,31 @@
-import {concurrently, notBlank} from './utils'
+import {notBlank, unique} from './utils'
 import {Configuration} from './configuration'
-import {Vulnerability} from './vulnerability'
+// import {Vulnerability} from './vulnerability'
 import {Issue} from './issue'
-import {createRecommendationCommentIfNeeded} from './comment'
+import {
+  createRecommendationsCommentIfNeeded,
+  createDuplicatesCommentIfNeeded
+} from './comment'
 import {TideliftClient} from './tidelift_client'
 import {GithubClient} from './github_client'
 import {info} from '@actions/core'
 import {TideliftRecommendation} from './tidelift_recommendation'
+
+export type VulnerabilityId = string
+export type VulnerabilitySet = Set<VulnerabilityId>
+export type Mentions = Map<VulnerabilityId, number>
 
 export class Scanner {
   config: Configuration
   github: GithubClient
   tidelift?: TideliftClient
 
-  constructor({config, github, tidelift}: Partial<Scanner> = {}) {
-    this.config = config || new Configuration()
-    this.github = github || new GithubClient(this.config.github_token)
+  constructor(options: Partial<Scanner> = {}) {
+    this.config = options['config'] || new Configuration()
+    this.github =
+      options['github'] || new GithubClient(this.config.github_token)
 
-    this.tidelift = tidelift
+    this.tidelift = options['tidelift']
     if (this.config.tidelift_token) {
       this.tidelift ||= new TideliftClient(this.config.tidelift_token)
     }
@@ -29,7 +37,7 @@ export class Scanner {
       `No action being taken. Ignoring because one or more assignees have been added to the issue`,
     no_vulnerabilities: () => 'Did not find any vulnerabilities mentioned',
     success: (vulns, recs) =>
-      `Detected mentions of: ${vulns}
+      `Detected mentions of: ${[...vulns]}
        With recommendations on: ${recs.map(r => r.vulnerability)}`
   }
 
@@ -44,83 +52,123 @@ export class Scanner {
       return Scanner.statuses.ignored_assigned()
     }
 
-    const vulnerabilities = await findMentionedVulnerabilities(
-      issue.searchableText,
-      this.github
-    )
-    const recommendations: TideliftRecommendation[] = []
+    const vulnerabilities = await this.find_all(issue.searchableText)
+    const recommendations = await this.find_recommendations(vulnerabilities)
+    const duplicates = await this.check_duplicates(issue, vulnerabilities)
 
-    if (vulnerabilities.length === 0) {
+    if (vulnerabilities.size === 0) {
       return Scanner.statuses.no_vulnerabilities()
     }
-
-    const labelsToAdd = vulnerabilities.map(vuln =>
-      this.config.templates.vuln_label(vuln.id)
+    const labelsToAdd = [...vulnerabilities.values()].map(vuln =>
+      this.config.templates.vuln_label(vuln)
     )
 
-    if (!this.config.tidelift_token) {
-      info('No Tidelift token provided, skipping recommendation scan.')
-    } else {
-      this.tidelift = new TideliftClient(this.config.tidelift_token)
+    if (recommendations.length > 0) {
+      labelsToAdd.push(this.config.templates.has_recommendation_label())
 
-      recommendations.concat(
-        await this.tidelift.fetchRecommendations(vulnerabilities)
+      createRecommendationsCommentIfNeeded(
+        issue,
+        recommendations,
+        this.github,
+        this.config.templates.recommendation_comment
       )
-
-      if (recommendations.length > 0) {
-        labelsToAdd.push(this.config.templates.has_recommendation_label())
-      }
-
-      for (const rec of recommendations) {
-        await createRecommendationCommentIfNeeded(
-          issue,
-          rec,
-          this.github,
-          this.config.templates.recommendation_body
-        )
-      }
     }
 
-    await this.github.addLabels(issue, labelsToAdd)
+    if (duplicates.size > 0) {
+      labelsToAdd.push(this.config.templates.possible_duplicate_label())
+
+      createDuplicatesCommentIfNeeded(
+        issue,
+        duplicates,
+        this.github,
+        this.config.templates.possible_duplicate_comment
+      )
+    }
+
+    await this.github?.addLabels(issue, labelsToAdd)
 
     return Scanner.statuses.success(vulnerabilities, recommendations)
   }
-}
 
-export async function findMentionedVulnerabilities(
-  fields: string[],
-  github: GithubClient | void
-): Promise<Vulnerability[]> {
-  const cve_ids = new Set(fields.flatMap(scanCve))
-  const ghsa_ids = new Set(fields.flatMap(scanGhsa))
-
-  if (github && ghsa_ids.size > 0) {
-    const translated_ids = await concurrently<string, string>(
-      [...ghsa_ids],
-      async ghsa_id => {
-        try {
-          return github.getCveForGhsa(ghsa_id)
-        } catch {
-          return
-        }
-      }
-    )
-
-    for (const cve_id of translated_ids) {
-      cve_ids.add(cve_id)
-    }
+  async find_all(fields: string[]): Promise<VulnerabilitySet> {
+    return new Set([
+      ...this.find_cves(fields),
+      ...(await this.find_ghsas(fields))
+    ])
   }
 
-  return [...cve_ids].map(id => new Vulnerability(id))
+  find_cves(fields: string[]): VulnerabilitySet {
+    return new Set(fields.flatMap(scanCve))
+  }
+
+  async find_ghsas(fields: string[]): Promise<VulnerabilitySet> {
+    if (!this.github) {
+      info('No github client for lookup')
+      return new Set()
+    }
+
+    const vulnerabilities = new Set<VulnerabilityId>()
+
+    for await (const ghsa_id of fields.flatMap(scanGhsa).filter(unique)) {
+      const possible_cve = await this.github.getCveForGhsa(ghsa_id)
+
+      if (possible_cve) {
+        vulnerabilities.add(possible_cve)
+      }
+    }
+
+    return vulnerabilities
+  }
+
+  async find_recommendations(
+    vulnerabilities: VulnerabilitySet
+  ): Promise<TideliftRecommendation[]> {
+    if (!this.tidelift) {
+      info('No Tidelift client for lookup')
+      return []
+    }
+
+    return await this.tidelift.fetchRecommendations([
+      ...vulnerabilities.values()
+    ])
+  }
+
+  async check_duplicates(
+    {repo, owner}: Pick<Issue, 'repo' | 'owner'>,
+    vulnerabilities: VulnerabilitySet
+  ): Promise<Mentions> {
+    if (!this.github) {
+      info('No github client for lookup')
+      return new Map()
+    }
+
+    const issuesData = await this.github?.listIssues({repo, owner})
+
+    if (!issuesData) {
+      info('Could not check other issues on repository')
+      return new Map()
+    }
+
+    const mentions = new Map()
+    for (const vuln of vulnerabilities) {
+      const issue_number = issuesData.find(({title, body}) =>
+        this.find_cves([title, String(body)]).has(vuln)
+      )?.id
+
+      if (issue_number) mentions.set(vuln, issue_number)
+    }
+
+    return mentions
+  }
 }
 
-export function scanGhsa(text: string): string[] {
+export function scanGhsa(text: string): VulnerabilityId[] {
   const regex = /GHSA-\w{4}-\w{4}-\w{4}/gi
 
   return (String(text).match(regex) || []).filter(notBlank)
 }
 
-export function scanCve(text: string): string[] {
+export function scanCve(text: string): VulnerabilityId[] {
   const regex = /CVE-\d{4}-\d+/gi
 
   return (String(text).match(regex) || [])
